@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Agentic Core Resource Lab</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="mast">
+        <div>
+          <p class="eyebrow">6G Agentic Core</p>
+          <h1>Resource Lab</h1>
+        </div>
+        <div class="mast-actions">
+          <button id="langToggle" class="lang-toggle" type="button" aria-label="Toggle language">中文</button>
+          <a id="docLink" class="doc-link" href="https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_resource_model.md"><span data-i18n="modelMarkdown">Model markdown</span><span class="open-badge" data-i18n="open">OPEN</span></a>
+          <div class="run-state">
+            <span class="state-dot" id="stateDot"></span>
+            <span id="stateText">Stable</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <aside class="controls" aria-label="Model controls">
+          <div class="panel-title">
+            <span class="panel-code">01</span>
+            <h2 data-i18n="traffic">Traffic</h2>
+          </div>
+
+          <label class="field">
+            <span class="label-line"><span data-i18n="totalRequestRate">Total request rate</span> <span class="unit">(req/s)</span><span class="help" data-tip-key="totalRequestRateTip" data-tip="Offered control-plane request arrival rate across registration, PDU session establishment, and service request.">?</span></span>
+            <div class="number-row">
+              <input id="totalRps" type="number" min="100" step="100" value="10000">
+              <span>req/s</span>
+            </div>
+          </label>
+
+          <label class="field">
+            <span class="label-line"><span data-i18n="intentRatio">Intent ratio among eligible procedures</span> <span class="unit">(%)</span><span class="help" data-tip-key="intentRatioTip" data-tip="Share of PDU session establishment and service request messages that carry intent. Registration is non-intent in this model.">?</span></span>
+            <input id="intentRatio" type="range" min="0" max="100" step="1" value="10">
+            <div class="range-readout"><strong id="intentRatioLabel">10%</strong><span id="actualIntentLabel">8.0% of all requests</span></div>
+          </label>
+
+          <div class="mix-grid">
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="registration">Registration</span> <span class="unit">(%)</span><span class="help" data-tip-key="registrationTip" data-tip="Traffic mix weight for UE registration requests. Mix values are normalized automatically.">?</span></span>
+              <input id="mixRegistration" type="number" min="0" max="100" step="1" value="20">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="pduSession">PDU session</span> <span class="unit">(%)</span><span class="help" data-tip-key="pduSessionTip" data-tip="Traffic mix weight for PDU session establishment requests. Intent can apply to this procedure.">?</span></span>
+              <input id="mixPdu" type="number" min="0" max="100" step="1" value="30">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="serviceRequest">Service request</span> <span class="unit">(%)</span><span class="help" data-tip-key="serviceRequestTip" data-tip="Traffic mix weight for service request messages. Intent can apply to this procedure.">?</span></span>
+              <input id="mixService" type="number" min="0" max="100" step="1" value="50">
+            </label>
+          </div>
+          <p class="hint" id="mixHint">Procedure mix is normalized automatically.</p>
+
+          <div class="panel-title secondary">
+            <span class="panel-code">02</span>
+            <h2 data-i18n="cluster">Cluster</h2>
+          </div>
+
+          <div class="split-grid">
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="cpuCores">CPU cores</span> <span class="unit">(cores)</span><span class="help" data-tip-key="cpuCoresTip" data-tip="Total CPU core capacity available to deterministic procedure handling and CPU-side agent logic.">?</span></span>
+              <input id="cpuCores" type="number" min="1" step="1" value="64">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="nicCapacity">NIC capacity</span> <span class="unit">(Gbps)</span><span class="help" data-tip-key="nicCapacityTip" data-tip="Network interface capacity available for control-plane message traffic.">?</span></span>
+              <input id="nicGbps" type="number" min="1" step="1" value="100">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="ramCapacity">RAM capacity</span> <span class="unit">(GB)</span><span class="help" data-tip-key="ramCapacityTip" data-tip="Host memory capacity for agent/NF processes, active request contexts, and runtime state.">?</span></span>
+              <input id="ramGb" type="number" min="1" step="1" value="256">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="vramCapacity">VRAM capacity</span> <span class="unit">(GB)</span><span class="help" data-tip-key="vramCapacityTip" data-tip="Accelerator memory available for the inference model and active intent request state.">?</span></span>
+              <input id="vramGb" type="number" min="1" step="1" value="24">
+            </label>
+          </div>
+
+          <label class="field">
+            <span class="label-line"><span data-i18n="gpuIntentCapacity">GPU intent inference capacity</span> <span class="unit">(intent/s)</span><span class="help" data-tip-key="gpuIntentCapacityTip" data-tip="Maximum intent-bearing requests the accelerator can process per second before queueing becomes unstable.">?</span></span>
+            <div class="number-row">
+              <input id="gpuCapacity" type="number" min="1" step="50" value="2000">
+              <span>intent/s</span>
+            </div>
+          </label>
+
+          <div class="panel-title secondary">
+            <span class="panel-code">03</span>
+            <h2 data-i18n="agentCost">Agent Cost</h2>
+          </div>
+
+          <div class="split-grid">
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="nonIntentCpuCost">Non-intent CPU cost</span> <span class="unit">(CPU-ms/request)</span><span class="help" data-tip-key="nonIntentCpuCostTip" data-tip="CPU-ms means one CPU core occupied for one millisecond. 0.3 CPU-ms is 0.3 ms on one core, or equivalent parallel CPU work.">?</span></span>
+              <input id="nonIntentCpu" type="number" min="0" step="0.1" value="0.3">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="intentCpuCost">Intent CPU cost</span> <span class="unit">(CPU-ms/request)</span><span class="help" data-tip-key="intentCpuCostTip" data-tip="CPU-side agent work for intent parsing, constraints, planning, and tool-wrapper handling outside GPU inference.">?</span></span>
+              <input id="intentCpu" type="number" min="0" step="0.1" value="2.0">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="intentInferenceLatency">Intent inference latency</span> <span class="unit">(ms/request)</span><span class="help" data-tip-key="intentInferenceLatencyTip" data-tip="Per-request accelerator inference service time before queueing delay.">?</span></span>
+              <input id="intentGpuMs" type="number" min="0" step="0.5" value="8">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="intentExtraBandwidth">Intent extra bandwidth</span> <span class="unit">(KB/request)</span><span class="help" data-tip-key="intentExtraBandwidthTip" data-tip="Additional control-plane message bytes caused by agent-tool wrappers and inter-agent task messages.">?</span></span>
+              <input id="intentBandwidthKb" type="number" min="0" step="1" value="12">
+            </label>
+          </div>
+
+          <button id="resetBtn" class="reset" type="button" data-i18n="resetBaseline">Reset baseline</button>
+        </aside>
+
+        <section class="results" aria-label="Model results">
+          <div class="metric-strip">
+            <article class="metric">
+              <span data-i18n="cpuDemandMetric">CPU demand (cores)</span>
+              <strong id="cpuDemand">--</strong>
+              <div class="bar"><i id="cpuBar"></i></div>
+            </article>
+            <article class="metric">
+              <span data-i18n="memoryMetric">Memory (GB)</span>
+              <strong id="ramDemand">--</strong>
+              <div class="bar"><i id="ramBar"></i></div>
+            </article>
+            <article class="metric">
+              <span data-i18n="gpuLoadMetric">GPU load (%)</span>
+              <strong id="gpuDemand">--</strong>
+              <div class="bar"><i id="gpuBar"></i></div>
+            </article>
+            <article class="metric">
+              <span data-i18n="bandwidthMetric">Bandwidth (Gbps)</span>
+              <strong id="netDemand">--</strong>
+              <div class="bar"><i id="netBar"></i></div>
+            </article>
+          </div>
+
+          <div class="latency-board">
+            <div class="latency-main">
+              <span data-i18n="meanLatencyMetric">Mean latency (ms)</span>
+              <strong id="meanLatency">--</strong>
+            </div>
+            <div class="latency-pair">
+              <span><span data-i18n="p95LatencyMetric">p95 latency (ms)</span> <strong id="p95Latency">--</strong></span>
+              <span><span data-i18n="p99LatencyMetric">p99 latency (ms)</span> <strong id="p99Latency">--</strong></span>
+            </div>
+            <div class="latency-note" id="bottleneckNote">Waiting for input.</div>
+          </div>
+
+          <div class="chart-panel">
+            <div class="panel-title inline">
+              <span class="panel-code">04</span>
+              <h2 data-i18n="intentSweep">Intent Sweep</h2>
+            </div>
+            <canvas id="sweepChart" width="920" height="360" aria-label="Intent sweep chart"></canvas>
+          </div>
+
+          <div class="table-panel">
+            <div class="panel-title inline">
+              <span class="panel-code">05</span>
+              <h2 data-i18n="calculatedSweep">Calculated Sweep</h2>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-i18n="tableEligibleIntent">Eligible intent (%)</th>
+                    <th data-i18n="tableTotalIntent">Total intent (%)</th>
+                    <th data-i18n="tableIntentRate">Intent rate (req/s)</th>
+                    <th data-i18n="tableCpuUtil">CPU util (%)</th>
+                    <th data-i18n="tableGpuUtil">GPU util (%)</th>
+                    <th data-i18n="tableBw">BW (Gbps)</th>
+                    <th data-i18n="tableMean">Mean (ms)</th>
+                    <th data-i18n="tableStatus">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="sweepTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="dist/app.js"></script>
+  </body>
+</html>

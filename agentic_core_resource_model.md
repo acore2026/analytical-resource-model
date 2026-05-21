@@ -1,5 +1,7 @@
 # Analytical Resource Model for Agentic 6G Core Control-Plane Procedures
 
+[中文版本](agentic_core_resource_model_zh.md)
+
 This section provides a model-based resource analysis for the proposed agentic 6G core architecture. The objective is not to report measured deployment data, but to estimate whether the additional cost introduced by NW-Agent reasoning, tool invocation, and agent cooperation can be bounded under high-concurrency control-plane workloads.
 
 The model compares a traditional deterministic core-network procedure path with an agentic path. The agentic path keeps the deterministic NF execution model for network state changes, while adding NW-Agent decision logic, cached tool metadata lookup, tool invocation wrappers, and, for intent-bearing requests, accelerator-backed AI inference.
@@ -12,35 +14,38 @@ Registration is treated as non-intent in the baseline. PDU session establishment
 
 Baseline workload:
 
-| Parameter | Value |
-| --- | ---: |
-| Total request rate | 10,000 requests/s |
-| Procedure mix | 20% registration, 30% PDU session establishment, 50% service request |
-| Intent setting sweep | 0%, 1%, 5%, 10%, 20%, 50%, 100% of intent-eligible requests |
-| CPU cluster capacity | 64 cores = 64,000 CPU-ms/s |
-| RAM capacity | 256 GB |
-| Accelerator capacity | 2,000 intent inferences/s |
-| Accelerator VRAM capacity | 24 GB |
-| Network capacity | 100 Gbps |
+
+| Parameter                 |                                                                Value |
+| ------------------------- | -------------------------------------------------------------------: |
+| Total request rate        |                                                    10,000 requests/s |
+| Procedure mix             | 20% registration, 30% PDU session establishment, 50% service request |
+| Intent setting sweep      |          0%, 1%, 5%, 10%, 20%, 50%, 100% of intent-eligible requests |
+| CPU cluster capacity      |                                           64 cores = 64,000 CPU-ms/s |
+| RAM capacity              |                                                               256 GB |
+| Accelerator capacity      |                                            2,000 intent inferences/s |
+| Accelerator VRAM capacity |                                                                24 GB |
+| Network capacity          |                                                             100 Gbps |
 
 Per-procedure deterministic baseline:
 
-| Procedure | Base latency | CPU cost | Control-plane bandwidth | Intent-eligible |
-| --- | ---: | ---: | ---: | --- |
-| Registration | 30 ms | 2.0 CPU-ms | 12 KB | No |
-| PDU session establishment | 40 ms | 2.5 CPU-ms | 16 KB | Yes |
-| Service request | 20 ms | 1.2 CPU-ms | 8 KB | Yes |
+
+| Procedure                 | Base latency |   CPU cost | Control-plane bandwidth | Intent-eligible |
+| ------------------------- | -----------: | ---------: | ----------------------: | --------------- |
+| Registration              |        30 ms | 2.0 CPU-ms |                   12 KB | No              |
+| PDU session establishment |        40 ms | 2.5 CPU-ms |                   16 KB | Yes             |
+| Service request           |        20 ms | 1.2 CPU-ms |                    8 KB | Yes             |
 
 Agentic overhead assumptions:
 
-| Component | Non-intent request | Intent request |
-| --- | ---: | ---: |
-| Agent CPU cost | 0.3 CPU-ms | 2.0 CPU-ms |
-| Agent latency before queueing | 1 ms | 4 ms fixed + 2 ms CPU + 8 ms AI inference |
-| Memory traffic | 64 KB/request | 512 KB/request |
-| Additional control-plane bandwidth | 0 KB/request | 12 KB/request |
-| Accelerator active memory | 0 | 4 MB/active intent request |
-| Fixed model memory | 0 | 16 GB VRAM when intent inference is enabled |
+
+| Component                          | Non-intent request |                              Intent request |
+| ---------------------------------- | -----------------: | ------------------------------------------: |
+| Agent CPU cost                     |         0.3 CPU-ms |                                  2.0 CPU-ms |
+| Agent latency before queueing      |               1 ms |   4 ms fixed + 2 ms CPU + 8 ms AI inference |
+| Memory traffic                     |      64 KB/request |                              512 KB/request |
+| Additional control-plane bandwidth |       0 KB/request |                               12 KB/request |
+| Accelerator active memory          |                  0 |                  4 MB/active intent request |
+| Fixed model memory                 |                  0 | 16 GB VRAM when intent inference is enabled |
 
 ## Model
 
@@ -114,20 +119,21 @@ This is used as an analytical approximation, not as an exact telecom simulator. 
 
 At a fixed offered load of 10,000 requests/s, increasing the share of intent-bearing requests mainly increases accelerator utilization and accelerator queueing delay. CPU demand also increases, but remains below 64-core capacity in this baseline. Control-plane network bandwidth remains well below 100 Gbps.
 
-| Eligible intent ratio | Total intent share | Intent rps | CPU cores | RAM | Memory traffic | GPU util | Required GPUs at <=70% | Network bandwidth | Mean latency | p95 latency | Status |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 0% | 0.0% | 0 | 20.5 | 32.0 GB | 5.120 Gbps | 0.0% | 0 | 0.896 Gbps | 30.0 ms | 58.2 ms | stable |
-| 1% | 0.8% | 80 | 20.6 | 32.0 GB | 5.407 Gbps | 4.0% | 1 | 0.904 Gbps | 30.1 ms | 58.7 ms | stable |
-| 5% | 4.0% | 400 | 21.2 | 32.0 GB | 6.554 Gbps | 20.0% | 1 | 0.934 Gbps | 30.6 ms | 60.8 ms | stable |
-| 10% | 8.0% | 800 | 21.9 | 32.0 GB | 7.987 Gbps | 40.0% | 1 | 0.973 Gbps | 31.2 ms | 72.8 ms | stable |
-| 20% | 16.0% | 1,600 | 23.2 | 32.0 GB | 10.854 Gbps | 80.0% | 2 | 1.050 Gbps | 32.7 ms | 294.5 ms | degraded |
-| 50% | 40.0% | 4,000 | 27.3 | 32.0 GB | 19.456 Gbps | 200.0% | 3 | 1.280 Gbps | unstable | unstable | unstable |
-| 100% | 80.0% | 8,000 | 34.1 | 32.0 GB | 33.792 Gbps | 400.0% | 6 | 1.664 Gbps | unstable | unstable | unstable |
+
+| Eligible intent ratio | Total intent share | Intent rps | CPU cores |     RAM | Memory traffic | GPU util | Required GPUs at <=70% | Network bandwidth | Mean latency | p95 latency | Status   |
+| --------------------: | -----------------: | ---------: | --------: | ------: | -------------: | -------: | ---------------------: | ----------------: | -----------: | ----------: | -------- |
+|                    0% |               0.0% |          0 |      20.5 | 32.0 GB |     5.120 Gbps |     0.0% |                      0 |        0.896 Gbps |      30.0 ms |     58.2 ms | stable   |
+|                    1% |               0.8% |         80 |      20.6 | 32.0 GB |     5.407 Gbps |     4.0% |                      1 |        0.904 Gbps |      30.1 ms |     58.7 ms | stable   |
+|                    5% |               4.0% |        400 |      21.2 | 32.0 GB |     6.554 Gbps |    20.0% |                      1 |        0.934 Gbps |      30.6 ms |     60.8 ms | stable   |
+|                   10% |               8.0% |        800 |      21.9 | 32.0 GB |     7.987 Gbps |    40.0% |                      1 |        0.973 Gbps |      31.2 ms |     72.8 ms | stable   |
+|                   20% |              16.0% |      1,600 |      23.2 | 32.0 GB |    10.854 Gbps |    80.0% |                      2 |        1.050 Gbps |      32.7 ms |    294.5 ms | degraded |
+|                   50% |              40.0% |      4,000 |      27.3 | 32.0 GB |    19.456 Gbps |   200.0% |                      3 |        1.280 Gbps |     unstable |    unstable | unstable |
+|                  100% |              80.0% |      8,000 |      34.1 | 32.0 GB |    33.792 Gbps |   400.0% |                      6 |        1.664 Gbps |     unstable |    unstable | unstable |
 
 The generated main-case raw results are available in `outputs/agentic_resource_results.csv`. The sensitivity sweep across 1,000, 10,000, 50,000, and 100,000 requests/s is available in `outputs/agentic_resource_sensitivity.csv`. The generated plots are:
 
-- `outputs/agentic_resource_utilization.png`
-- `outputs/agentic_latency.png`
+![](outputs/agentic_resource_utilization.png)
+![](outputs/agentic_latency.png)
 
 ## Interpretation
 
