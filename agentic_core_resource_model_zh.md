@@ -2,151 +2,142 @@
 
 [English version](agentic_core_resource_model.md)
 
-本节为所提出的 Agentic 6G 核心网架构提供基于模型的资源分析。目标不是报告真实部署测量数据，而是在高并发控制面负载下，估计 NW-Agent 推理、工具调用和 Agent 协作引入的额外成本是否可被限制在可调度范围内。
+本文档为所提出的 Agentic 6G 核心网架构提供理论资源模型。该模型不声称来自真实部署测量，目标是在高并发控制面负载下，估计 NW-Agent 推理、工具调用和 Agent 协作带来的额外成本是否可以被控制在可调度范围内。
 
-该模型比较传统确定性核心网流程路径和 Agentic 路径。Agentic 路径仍由确定性 NF 执行网络状态变更，同时增加 NW-Agent 决策逻辑、缓存的工具元数据查询、工具调用封装，以及面向携带意图请求的加速器 AI 推理。
+模型将传统确定性 NF 工作与 Agentic 额外开销分开建模。确定性路径执行普通控制面状态变更；Agentic 路径增加 Connection Agent 处理、缓存的 ARF/TRF 元数据查询、工具调用封装、Agent 间消息，以及面向携带意图请求的加速器推理。不包含漫游、AF 发起的意图和 SRF 路由成本。
 
-## 范围与假设
+## 负载模型
 
-建模的 UE 发起流程包括注册、PDU 会话建立和业务请求。不包括漫游和 AF 发起的意图。不计入 SRF 路由成本。总输入负载固定，实验改变可携带意图流程中意图消息的比例。
+流量由用户规模推导，而不是由固定百分比混合直接给出。令 `N_user` 表示用户数，`f_i` 表示单个用户每小时触发事件 `i` 的次数。事件 `i` 的到达率为：
 
-基线中注册流程视为非意图流程。PDU 会话建立和业务请求为可携带意图流程。因此，意图设置为 100% 表示所有可携带意图的请求都携带意图，并不表示所有控制面请求都携带意图。在采用的流程混合比例下，总意图请求占比最高为 80%。
+```text
+lambda_i [requests/s] = N_user [users] * f_i [events/user/hour] / 3600 [s/hour]
+```
 
-基线负载：
+总控制面请求速率为：
+
+```text
+lambda_total [requests/s] = sum_i(lambda_i)
+```
+
+基线采用 `3,600,000 users` 和 `2 PDU sessions/user`。PDU 会话数作为场景变量保留，但不会自动乘到事件速率上；若需要体现会话数量影响，应调整每用户每小时事件频率。
+
+| 事件 | 默认每用户每小时次数 | 推导请求速率 | 基线时延 | 基线 CPU | 基线带宽 | 可携带意图 |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 初始注册 | 0.1 events/user/hour | 100 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request | 否 |
+| 周期注册 | 0.1 events/user/hour | 100 requests/s | 25 ms | 1.5 CPU-ms/request | 10 KB/request | 否 |
+| 移动性注册 | 7.0 events/user/hour | 7,000 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request | 否 |
+| 初始 PDU 会话建立 | 1.0 events/user/hour | 1,000 requests/s | 40 ms | 2.5 CPU-ms/request | 16 KB/request | 是 |
+| PDU 会话释放 | 1.0 events/user/hour | 1,000 requests/s | 25 ms | 1.5 CPU-ms/request | 10 KB/request | 否 |
+| PDU 会话修改 | 2.0 events/user/hour | 2,000 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request | 是 |
+| 业务请求 | 21.0 events/user/hour | 21,000 requests/s | 20 ms | 1.2 CPU-ms/request | 8 KB/request | 是 |
+| AN 释放 | 35.0 events/user/hour | 35,000 requests/s | 15 ms | 0.8 CPU-ms/request | 6 KB/request | 否 |
+| 切换 | 23.1 events/user/hour | 23,100 requests/s | 25 ms | 1.8 CPU-ms/request | 12 KB/request | 否 |
+| 寻呼 | 14.0 events/user/hour | 14,000 requests/s | 12 ms | 0.6 CPU-ms/request | 4 KB/request | 否 |
+
+基线总速率为 `104,300 requests/s`。意图仅应用于初始 PDU 会话建立、PDU 会话修改和业务请求。因此，当可携带意图比例为 `100%` 时，总意图请求为 `24,000 requests/s`，占全部请求的 `23.0%`。
+
+## 资源假设
 
 | 参数 | 取值 |
 | --- | ---: |
-| 总请求速率 | 10,000 requests/s |
-| 流程混合 | 20% 注册，30% PDU 会话建立，50% 业务请求 |
-| 意图比例扫描 | 可携带意图请求的 0%、1%、5%、10%、20%、50%、100% |
-| CPU 集群容量 | 64 核 = 64,000 CPU-ms/s |
+| CPU 集群容量 | 256 CPU cores = 256,000 CPU-ms/s |
 | RAM 容量 | 256 GB |
-| 加速器容量 | 2,000 intent inferences/s |
-| 加速器 VRAM 容量 | 24 GB |
+| GPU 数量 | 20 GPUs |
+| GPU 推理能力 | 2,000 intent inferences/s/GPU |
+| GPU 总推理能力 | 40,000 intent inferences/s |
+| VRAM 容量 | 24 GB/GPU，总计 480 GB |
 | 网络容量 | 100 Gbps |
+| 非意图 Agent CPU 成本 | 0.3 CPU-ms/request |
+| 意图 Agent CPU 成本 | 2.0 CPU-ms/request |
+| 非意图 Agent 时延 | 1 ms/request |
+| 意图固定 Agent 时延 | 4 ms/request |
+| 意图 GPU 推理服务时间 | 8 ms/request |
+| 非意图内存流量 | 64 KB/request |
+| 意图内存流量 | 512 KB/request |
+| 意图额外带宽 | 12 KB/request |
+| 固定推理模型内存 | 每个活跃 GPU 占用 16 GB VRAM |
+| 活跃意图 VRAM | 4 MB/active intent request |
 
-各流程的确定性基线：
-
-| 流程 | 基线时延 | CPU 成本 | 控制面带宽 | 可携带意图 |
-| --- | ---: | ---: | ---: | --- |
-| 注册 | 30 ms | 2.0 CPU-ms | 12 KB | 否 |
-| PDU 会话建立 | 40 ms | 2.5 CPU-ms | 16 KB | 是 |
-| 业务请求 | 20 ms | 1.2 CPU-ms | 8 KB | 是 |
-
-Agentic 额外开销假设：
-
-| 组件 | 非意图请求 | 意图请求 |
-| --- | ---: | ---: |
-| Agent CPU 成本 | 0.3 CPU-ms | 2.0 CPU-ms |
-| 排队前 Agent 时延 | 1 ms | 4 ms 固定成本 + 2 ms CPU + 8 ms AI 推理 |
-| 内存流量 | 64 KB/request | 512 KB/request |
-| 额外控制面带宽 | 0 KB/request | 12 KB/request |
-| 加速器活跃内存 | 0 | 4 MB/active intent request |
-| 固定模型内存 | 0 | 启用意图推理时占用 16 GB VRAM |
+`CPU-ms` 表示一个 CPU 核被占用一毫秒。例如，`2 CPU-ms/request` 在 `100,000 requests/s` 下消耗 `200 CPU cores`。
 
 ## 模型
 
-令 `lambda` 表示总请求速率，`rho_I` 表示可携带意图流程中的意图比例。令 `m_i` 表示流程 `i` 的混合比例，若该流程可携带意图，则 `e_i` 为 1，否则为 0。
-
-实际总意图请求占比为：
+令 `rho_I` 表示可携带意图事件中的意图比例。若事件 `i` 可携带意图，则 `e_i` 为 1，否则为 0。
 
 ```text
-s_I = rho_I * sum_i(m_i * e_i)
+lambda_eligible [requests/s] = sum_i(lambda_i * e_i)
+lambda_I [requests/s] = rho_I * lambda_eligible
+s_I [unitless] = lambda_I / lambda_total
 ```
 
-意图到达速率为：
+平均 CPU 成本为：
 
 ```text
-lambda_I = lambda * s_I
+C_cpu [CPU-ms/request] =
+  sum_i((lambda_i / lambda_total) * C_base,i)
+  + s_I * C_agent,intent
+  + (1 - s_I) * C_agent,nonintent
 ```
 
-每请求平均 CPU 成本为：
+CPU 需求和利用率为：
 
 ```text
-C_cpu = sum_i(m_i * C_base,i) + s_I * C_agent,intent + (1 - s_I) * C_agent,nonintent
+D_cpu [CPU cores] = lambda_total * C_cpu / 1000
+u_cpu [unitless] = D_cpu / N_cpu
 ```
 
-CPU 核需求为：
+控制面带宽为：
 
 ```text
-U_cpu_cores = lambda * C_cpu / 1000
+B_req [KB/request] =
+  sum_i((lambda_i / lambda_total) * B_base,i)
+  + s_I * B_agent,intent
+
+B_net [Gbps] = lambda_total * B_req * 8 / 1,000,000
+u_net [unitless] = B_net / C_net
 ```
 
-CPU 利用率为：
+GPU 利用率为：
 
 ```text
-u_cpu = U_cpu_cores / N_cpu
+u_gpu [unitless] = lambda_I / (N_gpu * mu_gpu)
+N_gpu,70 [GPUs] = ceil(lambda_I / (0.7 * mu_gpu))
 ```
 
-每请求平均控制面带宽为：
+排队延迟采用简单的 M/M/1 启发式敏感性项：
 
 ```text
-B_req = sum_i(m_i * B_base,i) + s_I * B_agent,intent
+D_queue [ms] = S [ms] * u / (1 - u), for u < 1
 ```
 
-网络带宽为：
-
-```text
-B_net = lambda * B_req * 8 / 1,000,000
-```
-
-其中 `B_req` 的单位为 KB/request，`B_net` 的单位为 Gbps。
-
-加速器利用率建模为：
-
-```text
-u_gpu = lambda_I / mu_gpu
-```
-
-其中 `mu_gpu` 是单个加速器的意图推理服务能力。若 `u_gpu >= 1`，推理队列不稳定。为将利用率保持在 70% 以下，所需加速器数量为：
-
-```text
-N_gpu,70 = ceil(lambda_I / (0.7 * mu_gpu))
-```
-
-每类资源的排队延迟使用简单的 M/M/1 启发式敏感性项近似：
-
-```text
-D_queue = S * u / (1 - u), for u < 1
-```
-
-该项仅作为分析近似，不等同于精确的电信系统仿真。端到端时延由确定性流程时延、Agentic 固定时延，以及 CPU、加速器和网络资源的主导排队效应组成。结果报告平均时延、p95 和 p99 时延。当任一关键资源利用率超过 100% 时，时延标记为不稳定。
+该项是分析近似，不是精确电信系统仿真。平均、p95 和 p99 时延由确定性流程时延、固定 Agent 时延、CPU 排队、GPU 推理排队和网络排队组成。当任一资源利用率达到或超过 100% 时，该资源被标记为不稳定。
 
 ## 分析结果
 
-在固定输入负载为 10,000 requests/s 时，增加意图请求占比主要会提高加速器利用率和加速器排队延迟。CPU 需求也会增加，但在该基线中仍低于 64 核容量。控制面网络带宽远低于 100 Gbps。
+下表固定用户规模和事件频率，仅改变可携带意图事件中的意图比例。
 
-| 可携带意图比例 | 总意图占比 | 意图 rps | CPU 核 | RAM | 内存流量 | GPU 利用率 | 保持 <=70% 所需 GPU | 网络带宽 | 平均时延 | p95 时延 | 状态 |
+| 可携带意图比例 | 总意图占比 | 意图 rps | CPU 核 | CPU 利用率 | 内存流量 | GPU 利用率 | 保持 <=70% 所需 GPU | 网络带宽 | 平均时延 | p95 时延 | 状态 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 0% | 0.0% | 0 | 20.5 | 32.0 GB | 5.120 Gbps | 0.0% | 0 | 0.896 Gbps | 30.0 ms | 58.2 ms | 稳定 |
-| 1% | 0.8% | 80 | 20.6 | 32.0 GB | 5.407 Gbps | 4.0% | 1 | 0.904 Gbps | 30.1 ms | 58.7 ms | 稳定 |
-| 5% | 4.0% | 400 | 21.2 | 32.0 GB | 6.554 Gbps | 20.0% | 1 | 0.934 Gbps | 30.6 ms | 60.8 ms | 稳定 |
-| 10% | 8.0% | 800 | 21.9 | 32.0 GB | 7.987 Gbps | 40.0% | 1 | 0.973 Gbps | 31.2 ms | 72.8 ms | 稳定 |
-| 20% | 16.0% | 1,600 | 23.2 | 32.0 GB | 10.854 Gbps | 80.0% | 2 | 1.050 Gbps | 32.7 ms | 294.5 ms | 退化 |
-| 50% | 40.0% | 4,000 | 27.3 | 32.0 GB | 19.456 Gbps | 200.0% | 3 | 1.280 Gbps | 不稳定 | 不稳定 | 不稳定 |
-| 100% | 80.0% | 8,000 | 34.1 | 32.0 GB | 33.792 Gbps | 400.0% | 6 | 1.664 Gbps | 不稳定 | 不稳定 | 不稳定 |
+| 0% | 0.0% | 0 | 156.8 | 61.3% | 53.402 Gbps | 0.0% | 0 | 6.779 Gbps | 22.9 ms | 95.1 ms | 稳定 |
+| 1% | 0.2% | 240 | 157.2 | 61.4% | 54.262 Gbps | 0.6% | 1 | 6.802 Gbps | 22.9 ms | 95.8 ms | 稳定 |
+| 5% | 1.2% | 1,200 | 158.9 | 62.1% | 57.702 Gbps | 3.0% | 1 | 6.894 Gbps | 23.1 ms | 98.7 ms | 稳定 |
+| 10% | 2.3% | 2,400 | 160.9 | 62.9% | 62.003 Gbps | 6.0% | 2 | 7.010 Gbps | 23.4 ms | 102.5 ms | 稳定 |
+| 20% | 4.6% | 4,800 | 165.0 | 64.4% | 70.605 Gbps | 12.0% | 4 | 7.240 Gbps | 23.9 ms | 110.8 ms | 稳定 |
+| 50% | 11.5% | 12,000 | 177.2 | 69.2% | 96.410 Gbps | 30.0% | 9 | 7.931 Gbps | 25.8 ms | 141.9 ms | 稳定 |
+| 100% | 23.0% | 24,000 | 197.6 | 77.2% | 139.418 Gbps | 60.0% | 18 | 9.083 Gbps | 29.9 ms | 232.3 ms | 退化 |
 
-主场景原始结果位于 `outputs/agentic_resource_results.csv`。覆盖 1,000、10,000、50,000 和 100,000 requests/s 的敏感性扫描位于 `outputs/agentic_resource_sensitivity.csv`。生成的图如下：
+生成结果位于 `outputs/agentic_resource_results.csv`。用户规模敏感性扫描位于 `outputs/agentic_resource_sensitivity.csv`。
 
 ![](outputs/agentic_resource_utilization.png)
 ![](outputs/agentic_latency.png)
 
 ## 结果解读
 
-分析表明，当大部分流量走非意图路径，并且仅对携带意图的请求执行推理时，Agentic 控制面额外开销是有界的。在 10,000 requests/s 下，即使所有可携带意图请求都携带意图，CPU 集群利用率仍低于 54%。RAM 和控制面带宽在该基线中也不是限制因素。
+事件速率模型表明，高并发主要由高频业务请求、AN 释放、切换和寻呼事件驱动。在配置 256 核 CPU 集群和 20 GPU 推理池后，系统在完整意图比例扫描范围内保持稳定。在 `100%` 可携带意图流量下，模型进入 CPU 退化区但不失稳：CPU 利用率为 `77.2%`，GPU 利用率为 `60.0%`，控制面带宽为 `9.083 Gbps`。
 
-限制因素是加速器推理。若单个加速器能力为 2,000 intent inferences/s，系统在可携带意图流量不超过 10% 时保持稳定，在 20% 时进入退化区间。超过该范围后，除非运营商增加加速器、降低模型成本、增强批处理、缓存重复决策，或将简单意图路由到轻量 CPU 分类器，否则推理队列将不稳定。
-
-敏感性 CSV 显示，在 1,000 requests/s 时，基线集群在完整意图比例扫描范围内均保持稳定。在 50,000 和 100,000 requests/s 时，即使没有意图流量，64 核 CPU 基线也已不足，因此必须先水平扩展确定性控制面容量，再讨论 Agentic 推理容量。这一区分很重要：意图比例主要施压于加速器，而总请求速率首先施压于 CPU 侧确定性处理。
-
-这支持论文中的如下论点：当架构采用以下机制时，Agentic 处理在高并发下是可行的：
-
-- 缓存 ARF/TRF 元数据，而不是每请求执行仓库发现；
-- 非意图路径通过 Connection Agent 执行轻量处理；
-- 仅对携带意图的请求使用加速器推理；
-- 当意图流量增加时执行准入控制或弹性扩容；
-- 通过模型大小和批处理策略将加速器利用率保持在目标阈值以下。
+主要结论是：总用户/事件负载首先施压于确定性 CPU 处理，而提高意图比例主要增加 GPU 利用率、VRAM 使用、内存流量和尾时延。当意图推理被选择性应用、元数据查询被缓存、非意图路径保持轻量，并且 GPU 容量按可携带意图到达率扩展时，该架构在高并发下是可行的。
 
 ## 局限性
 
-上述数值为分析假设，不是 6G 核心网部署测量结果。实际结果取决于模型大小、批处理行为、工具粒度、NF 实现、数据库访问时延、加速器类型和运营商策略逻辑。因此，该模型应被表述为理论容量分析和敏感性研究。未来原型应使用实测的组件级 CPU 时间、推理时延、内存流量和消息大小替换合成服务时间假设。
+所有数值均为分析假设。实际结果取决于模型大小、批处理行为、推理硬件、NF 实现、数据库访问时延、消息编码、工具粒度和运营商策略逻辑。因此，结果应表述为理论容量分析和敏感性研究。未来原型应使用实测 CPU 时间、推理时延、内存流量、消息大小和排队行为替代合成服务时间假设。

@@ -27,48 +27,104 @@
         <aside class="controls" aria-label="Model controls">
           <div class="panel-title">
             <span class="panel-code">01</span>
-            <h2 data-i18n="traffic">Traffic</h2>
+            <h2 data-i18n="userModel">User Model</h2>
+          </div>
+
+          <div class="split-grid">
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="userCount">User count</span> <span class="unit">(users)</span><span class="help" data-tip-key="userCountTip" data-tip="Number of users represented by the model. Event request rates scale linearly with this value.">?</span></span>
+              <input id="userCount" type="number" min="1" step="10000" value="3600000">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="pduSessionsPerUser">PDU sessions per user</span> <span class="unit">(sessions/user)</span><span class="help" data-tip-key="pduSessionsPerUserTip" data-tip="Average PDU sessions per user. It is a scenario descriptor; change event frequencies to model session-driven traffic changes.">?</span></span>
+              <input id="pduSessionsPerUser" type="number" min="0" step="0.1" value="2">
+            </label>
           </div>
 
           <label class="field">
-            <span class="label-line"><span data-i18n="totalRequestRate">Total request rate</span> <span class="unit">(req/s)</span><span class="help" data-tip-key="totalRequestRateTip" data-tip="Offered control-plane request arrival rate across registration, PDU session establishment, and service request.">?</span></span>
-            <div class="number-row">
-              <input id="totalRps" type="number" min="100" step="100" value="10000">
-              <span>req/s</span>
-            </div>
-          </label>
-
-          <label class="field">
-            <span class="label-line"><span data-i18n="intentRatio">Intent ratio among eligible procedures</span> <span class="unit">(%)</span><span class="help" data-tip-key="intentRatioTip" data-tip="Share of PDU session establishment and service request messages that carry intent. Registration is non-intent in this model.">?</span></span>
+            <span class="label-line"><span data-i18n="intentRatio">Intent ratio among eligible events</span> <span class="unit">(%)</span><span class="help" data-tip-key="intentRatioTip" data-tip="Share of initial PDU establishment, PDU modification, and service request events that carry user intent.">?</span></span>
             <input id="intentRatio" type="range" min="0" max="100" step="1" value="10">
-            <div class="range-readout"><strong id="intentRatioLabel">10%</strong><span id="actualIntentLabel">8.0% of all requests</span></div>
+            <div class="range-readout"><strong id="intentRatioLabel">10%</strong><span id="actualIntentLabel">2.3% of all requests</span></div>
           </label>
-
-          <div class="mix-grid">
-            <label class="field compact">
-              <span class="label-line"><span data-i18n="registration">Registration</span> <span class="unit">(%)</span><span class="help" data-tip-key="registrationTip" data-tip="Traffic mix weight for UE registration requests. Mix values are normalized automatically.">?</span></span>
-              <input id="mixRegistration" type="number" min="0" max="100" step="1" value="20">
-            </label>
-            <label class="field compact">
-              <span class="label-line"><span data-i18n="pduSession">PDU session</span> <span class="unit">(%)</span><span class="help" data-tip-key="pduSessionTip" data-tip="Traffic mix weight for PDU session establishment requests. Intent can apply to this procedure.">?</span></span>
-              <input id="mixPdu" type="number" min="0" max="100" step="1" value="30">
-            </label>
-            <label class="field compact">
-              <span class="label-line"><span data-i18n="serviceRequest">Service request</span> <span class="unit">(%)</span><span class="help" data-tip-key="serviceRequestTip" data-tip="Traffic mix weight for service request messages. Intent can apply to this procedure.">?</span></span>
-              <input id="mixService" type="number" min="0" max="100" step="1" value="50">
-            </label>
-          </div>
-          <p class="hint" id="mixHint">Procedure mix is normalized automatically.</p>
+          <p class="hint" id="trafficHint">Total traffic: 104,300 req/s.</p>
 
           <div class="panel-title secondary">
             <span class="panel-code">02</span>
+            <h2 data-i18n="eventRates">Event Rates</h2>
+          </div>
+
+          <div class="event-grid">
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="initialRegistration">Initial registration</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="initialRegistrationTip" data-tip="How often one user triggers initial registration in one hour.">?</span></span>
+              <input id="eventInitialRegistration" type="number" min="0" step="0.1" value="0.1">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="periodicRegistration">Periodic registration</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="periodicRegistrationTip" data-tip="How often one user triggers periodic registration update in one hour.">?</span></span>
+              <input id="eventPeriodicRegistration" type="number" min="0" step="0.1" value="0.1">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="mobilityRegistration">Mobility registration</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="mobilityRegistrationTip" data-tip="How often one user triggers mobility registration update in one hour.">?</span></span>
+              <input id="eventMobilityRegistration" type="number" min="0" step="0.1" value="7">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="initialPdu">Initial PDU establishment</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="initialPduTip" data-tip="How often one user establishes an initial PDU session in one hour. This event is intent-eligible.">?</span></span>
+              <input id="eventInitialPdu" type="number" min="0" step="0.1" value="1">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="pduRelease">PDU session release</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="pduReleaseTip" data-tip="How often one user releases a PDU session in one hour.">?</span></span>
+              <input id="eventPduRelease" type="number" min="0" step="0.1" value="1">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="pduModification">PDU session modification</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="pduModificationTip" data-tip="How often one user modifies a PDU session in one hour. This event is intent-eligible.">?</span></span>
+              <input id="eventPduModification" type="number" min="0" step="0.1" value="2">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="serviceRequest">Service request</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="serviceRequestTip" data-tip="How often one user triggers service request in one hour. This event is intent-eligible.">?</span></span>
+              <input id="eventServiceRequest" type="number" min="0" step="0.1" value="21">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="anRelease">AN release</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="anReleaseTip" data-tip="How often one user triggers access-network release in one hour.">?</span></span>
+              <input id="eventAnRelease" type="number" min="0" step="0.1" value="35">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="handover">Handover</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="handoverTip" data-tip="How often one user performs handover in one hour.">?</span></span>
+              <input id="eventHandover" type="number" min="0" step="0.1" value="23.1">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="paging">Paging</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="pagingTip" data-tip="How often one user receives paging in one hour.">?</span></span>
+              <input id="eventPaging" type="number" min="0" step="0.1" value="14">
+            </label>
+          </div>
+
+          <div class="event-summary">
+            <div class="panel-title inline">
+              <span class="panel-code mini">R</span>
+              <h2 data-i18n="derivedTraffic">Derived Traffic</h2>
+            </div>
+            <div class="event-table-wrap">
+              <table class="event-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="eventName">Event</th>
+                    <th data-i18n="perUserHour">Per user/hour</th>
+                    <th data-i18n="derivedRps">Request/s</th>
+                    <th data-i18n="eligible">Intent</th>
+                  </tr>
+                </thead>
+                <tbody id="eventTable"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel-title secondary">
+            <span class="panel-code">03</span>
             <h2 data-i18n="cluster">Cluster</h2>
           </div>
 
           <div class="split-grid">
             <label class="field compact">
               <span class="label-line"><span data-i18n="cpuCores">CPU cores</span> <span class="unit">(cores)</span><span class="help" data-tip-key="cpuCoresTip" data-tip="Total CPU core capacity available to deterministic procedure handling and CPU-side agent logic.">?</span></span>
-              <input id="cpuCores" type="number" min="1" step="1" value="64">
+              <input id="cpuCores" type="number" min="1" step="1" value="256">
             </label>
             <label class="field compact">
               <span class="label-line"><span data-i18n="nicCapacity">NIC capacity</span> <span class="unit">(Gbps)</span><span class="help" data-tip-key="nicCapacityTip" data-tip="Network interface capacity available for control-plane message traffic.">?</span></span>
@@ -79,21 +135,21 @@
               <input id="ramGb" type="number" min="1" step="1" value="256">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="vramCapacity">VRAM capacity</span> <span class="unit">(GB)</span><span class="help" data-tip-key="vramCapacityTip" data-tip="Accelerator memory available for the inference model and active intent request state.">?</span></span>
-              <input id="vramGb" type="number" min="1" step="1" value="24">
+              <span class="label-line"><span data-i18n="gpuCount">GPU count</span> <span class="unit">(GPUs)</span><span class="help" data-tip-key="gpuCountTip" data-tip="Number of GPUs in the inference pool.">?</span></span>
+              <input id="gpuCount" type="number" min="0" step="1" value="20">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="vramPerGpu">VRAM per GPU</span> <span class="unit">(GB/GPU)</span><span class="help" data-tip-key="vramPerGpuTip" data-tip="Accelerator memory available on each GPU for the inference model and active intent request state.">?</span></span>
+              <input id="gpuVramPerGpuGb" type="number" min="1" step="1" value="24">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="gpuIntentCapacity">GPU capacity per GPU</span> <span class="unit">(intent/s/GPU)</span><span class="help" data-tip-key="gpuIntentCapacityTip" data-tip="Maximum intent-bearing requests one GPU can process per second before queueing becomes unstable.">?</span></span>
+              <input id="gpuCapacityPerGpu" type="number" min="1" step="50" value="2000">
             </label>
           </div>
 
-          <label class="field">
-            <span class="label-line"><span data-i18n="gpuIntentCapacity">GPU intent inference capacity</span> <span class="unit">(intent/s)</span><span class="help" data-tip-key="gpuIntentCapacityTip" data-tip="Maximum intent-bearing requests the accelerator can process per second before queueing becomes unstable.">?</span></span>
-            <div class="number-row">
-              <input id="gpuCapacity" type="number" min="1" step="50" value="2000">
-              <span>intent/s</span>
-            </div>
-          </label>
-
           <div class="panel-title secondary">
-            <span class="panel-code">03</span>
+            <span class="panel-code">04</span>
             <h2 data-i18n="agentCost">Agent Cost</h2>
           </div>
 
@@ -157,15 +213,20 @@
 
           <div class="chart-panel">
             <div class="panel-title inline">
-              <span class="panel-code">04</span>
+              <span class="panel-code">05</span>
               <h2 data-i18n="intentSweep">Intent Sweep</h2>
             </div>
-            <canvas id="sweepChart" width="920" height="360" aria-label="Intent sweep chart"></canvas>
+            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share within eligible events. Y-axis: CPU, GPU, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.</p>
+            <div class="chart-frame">
+              <div class="axis-label y-axis" data-i18n="yAxisLabel">Resource utilization (%)</div>
+              <canvas id="sweepChart" width="920" height="360" aria-label="Intent sweep chart"></canvas>
+              <div class="axis-label x-axis" data-i18n="xAxisLabel">Eligible intent ratio (%)</div>
+            </div>
           </div>
 
           <div class="table-panel">
             <div class="panel-title inline">
-              <span class="panel-code">05</span>
+              <span class="panel-code">06</span>
               <h2 data-i18n="calculatedSweep">Calculated Sweep</h2>
             </div>
             <div class="table-wrap">

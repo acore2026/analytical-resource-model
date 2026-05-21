@@ -2,8 +2,8 @@
 """Analytical resource model for an agentic 6G core control plane.
 
 The numbers are synthetic and intended for paper sensitivity analysis, not as
-deployment measurements. The model keeps total request rate fixed and varies
-the share of intent-bearing messages among intent-eligible procedures.
+deployment measurements. Traffic is derived from user population and per-user
+per-hour control-plane event frequencies.
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ from typing import Dict, Iterable, List
 
 
 @dataclass(frozen=True)
-class Procedure:
+class EventType:
     name: str
-    mix: float
+    per_user_per_hour: float
     base_latency_ms: float
     base_cpu_ms: float
     base_bandwidth_kb: float
@@ -27,12 +27,14 @@ class Procedure:
 
 @dataclass(frozen=True)
 class ModelConfig:
-    total_rps: float = 10_000.0
-    cpu_cores: float = 64.0
+    user_count: float = 3_600_000.0
+    pdu_sessions_per_user: float = 2.0
+    cpu_cores: float = 256.0
     nic_gbps: float = 100.0
     ram_gb: float = 256.0
-    gpu_vram_gb: float = 24.0
-    gpu_capacity_rps: float = 2_000.0
+    gpu_count: float = 20.0
+    gpu_vram_per_gpu_gb: float = 24.0
+    gpu_capacity_per_gpu_rps: float = 2_000.0
     cpu_degraded_util: float = 0.70
     cpu_high_risk_util: float = 0.85
     gpu_degraded_util: float = 0.70
@@ -51,14 +53,29 @@ class ModelConfig:
     active_context_ram_kb: float = 128.0
 
 
-PROCEDURES: List[Procedure] = [
-    Procedure("registration", 0.20, 30.0, 2.0, 12.0, False),
-    Procedure("pdu_session_establishment", 0.30, 40.0, 2.5, 16.0, True),
-    Procedure("service_request", 0.50, 20.0, 1.2, 8.0, True),
+EVENTS: List[EventType] = [
+    EventType("initial_registration", 0.1, 30.0, 2.0, 12.0, False),
+    EventType("periodic_registration", 0.1, 25.0, 1.5, 10.0, False),
+    EventType("mobility_registration", 7.0, 30.0, 2.0, 12.0, False),
+    EventType("initial_pdu_session_establishment", 1.0, 40.0, 2.5, 16.0, True),
+    EventType("pdu_session_release", 1.0, 25.0, 1.5, 10.0, False),
+    EventType("pdu_session_modification", 2.0, 30.0, 2.0, 12.0, True),
+    EventType("service_request", 21.0, 20.0, 1.2, 8.0, True),
+    EventType("an_release", 35.0, 15.0, 0.8, 6.0, False),
+    EventType("handover", 23.1, 25.0, 1.8, 12.0, False),
+    EventType("paging", 14.0, 12.0, 0.6, 4.0, False),
 ]
 
 INTENT_SETTINGS = [0.00, 0.01, 0.05, 0.10, 0.20, 0.50, 1.00]
-SENSITIVITY_RPS = [1_000.0, 10_000.0, 50_000.0, 100_000.0]
+SENSITIVITY_USERS = [100_000.0, 1_000_000.0, 3_600_000.0, 10_000_000.0]
+
+
+def event_rps(config: ModelConfig, event: EventType) -> float:
+    return config.user_count * event.per_user_per_hour / 3600.0
+
+
+def total_rps(config: ModelConfig) -> float:
+    return sum(event_rps(config, event) for event in EVENTS)
 
 
 def queue_delay_ms(util: float, service_ms: float) -> float:
@@ -80,6 +97,13 @@ def status(util: float, degraded: float, high_risk: float) -> str:
     return "stable"
 
 
+def weighted_average(config: ModelConfig, attr: str) -> float:
+    total = total_rps(config)
+    if total <= 0:
+        return 0.0
+    return sum(event_rps(config, event) * getattr(event, attr) for event in EVENTS) / total
+
+
 def fmt(value: float) -> str:
     if math.isinf(value):
         return "inf"
@@ -87,46 +111,49 @@ def fmt(value: float) -> str:
 
 
 def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, float | str]:
-    eligible_mix = sum(p.mix for p in PROCEDURES if p.intent_eligible)
-    actual_intent_share = eligible_mix * eligible_intent_ratio
-    intent_rps = config.total_rps * actual_intent_share
-    non_intent_rps = config.total_rps - intent_rps
+    rps_total = total_rps(config)
+    intent_eligible_rps = sum(event_rps(config, event) for event in EVENTS if event.intent_eligible)
+    intent_rps = intent_eligible_rps * eligible_intent_ratio
+    actual_intent_share = intent_rps / rps_total if rps_total > 0 else 0.0
+    gpu_total_capacity_rps = config.gpu_count * config.gpu_capacity_per_gpu_rps
+    gpu_total_vram_gb = config.gpu_count * config.gpu_vram_per_gpu_gb
 
-    base_cpu_ms_avg = sum(p.mix * p.base_cpu_ms for p in PROCEDURES)
+    base_cpu_ms_avg = weighted_average(config, "base_cpu_ms")
     agent_cpu_ms_avg = (
         actual_intent_share * config.intent_agent_cpu_ms
         + (1.0 - actual_intent_share) * config.non_intent_agent_cpu_ms
     )
     cpu_ms_per_request = base_cpu_ms_avg + agent_cpu_ms_avg
-    cpu_core_demand = config.total_rps * cpu_ms_per_request / 1000.0
+    cpu_core_demand = rps_total * cpu_ms_per_request / 1000.0
     cpu_util = cpu_core_demand / config.cpu_cores
     cpu_delay = queue_delay_ms(cpu_util, cpu_ms_per_request)
 
-    base_bandwidth_kb_avg = sum(p.mix * p.base_bandwidth_kb for p in PROCEDURES)
+    base_bandwidth_kb_avg = weighted_average(config, "base_bandwidth_kb")
     bandwidth_kb_per_request = (
         base_bandwidth_kb_avg
         + actual_intent_share * config.intent_agent_bandwidth_kb
     )
-    bandwidth_gbps = config.total_rps * bandwidth_kb_per_request * 8.0 / 1_000_000.0
+    bandwidth_gbps = rps_total * bandwidth_kb_per_request * 8.0 / 1_000_000.0
     network_util = bandwidth_gbps / config.nic_gbps
     network_delay = queue_delay_ms(network_util, 0.1)
 
-    gpu_util = intent_rps / config.gpu_capacity_rps if config.gpu_capacity_rps else math.inf
-    gpu_queue_delay = queue_delay_ms(gpu_util, 1_000.0 / config.gpu_capacity_rps)
+    gpu_util = intent_rps / gpu_total_capacity_rps if gpu_total_capacity_rps else math.inf
+    gpu_queue_delay = queue_delay_ms(gpu_util, 1_000.0 / gpu_total_capacity_rps)
     gpu_inference_latency = config.intent_gpu_latency_ms + gpu_queue_delay
 
     active_intent_requests = intent_rps * config.intent_gpu_latency_ms / 1000.0
     gpu_vram_gb = 0.0
     if intent_rps > 0:
+        active_gpu_count = min(
+            config.gpu_count,
+            math.ceil(intent_rps / config.gpu_capacity_per_gpu_rps)
+        )
         gpu_vram_gb = (
-            config.fixed_model_vram_gb
+            active_gpu_count * config.fixed_model_vram_gb
             + active_intent_requests * config.intent_gpu_active_vram_mb / 1024.0
         )
 
-    # Little's law approximation with base latency only; agent delay is added below.
-    active_requests = config.total_rps * (
-        sum(p.mix * p.base_latency_ms for p in PROCEDURES) / 1000.0
-    )
+    active_requests = rps_total * (weighted_average(config, "base_latency_ms") / 1000.0)
     ram_gb = (
         config.base_ram_gb
         + active_requests * config.active_context_ram_kb / 1024.0 / 1024.0
@@ -135,27 +162,21 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
         (1.0 - actual_intent_share) * config.non_intent_mem_traffic_kb
         + actual_intent_share * config.intent_mem_traffic_kb
     )
-    memory_traffic_gbps = (
-        config.total_rps * memory_traffic_kb_per_request * 8.0 / 1_000_000.0
-    )
+    memory_traffic_gbps = rps_total * memory_traffic_kb_per_request * 8.0 / 1_000_000.0
 
     mean_latency = 0.0
     unstable = cpu_util >= 1.0 or gpu_util >= 1.0 or network_util >= 1.0
-    for proc in PROCEDURES:
-        proc_rps_share = proc.mix
-        if proc.intent_eligible:
-            intent_share_for_proc = eligible_intent_ratio
-        else:
-            intent_share_for_proc = 0.0
-
+    for event in EVENTS:
+        event_share = event_rps(config, event) / rps_total if rps_total > 0 else 0.0
+        event_intent_share = eligible_intent_ratio if event.intent_eligible else 0.0
         non_intent_latency = (
-            proc.base_latency_ms
+            event.base_latency_ms
             + config.non_intent_agent_latency_ms
             + cpu_delay
             + network_delay
         )
         intent_latency = (
-            proc.base_latency_ms
+            event.base_latency_ms
             + config.intent_agent_fixed_latency_ms
             + config.intent_agent_cpu_ms
             + gpu_inference_latency
@@ -165,9 +186,9 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
         if math.isinf(intent_latency):
             unstable = True
 
-        mean_latency += proc_rps_share * (
-            (1.0 - intent_share_for_proc) * non_intent_latency
-            + intent_share_for_proc * intent_latency
+        mean_latency += event_share * (
+            (1.0 - event_intent_share) * non_intent_latency
+            + event_intent_share * intent_latency
         )
 
     bottleneck_util = max(cpu_util, gpu_util, network_util)
@@ -181,14 +202,22 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
         p99_latency = mean_latency * min(tail_amplifier * 1.35, 15.0)
 
     required_gpus_70pct = (
-        math.ceil(intent_rps / (config.gpu_capacity_rps * config.gpu_degraded_util))
+        math.ceil(intent_rps / (config.gpu_capacity_per_gpu_rps * config.gpu_degraded_util))
         if intent_rps > 0
         else 0
     )
 
-    return {
-        "total_rps": config.total_rps,
+    result: Dict[str, float | str] = {
+        "user_count": config.user_count,
+        "pdu_sessions_per_user": config.pdu_sessions_per_user,
+        "gpu_count": config.gpu_count,
+        "gpu_capacity_per_gpu_rps": config.gpu_capacity_per_gpu_rps,
+        "gpu_total_capacity_rps": gpu_total_capacity_rps,
+        "gpu_vram_per_gpu_gb": config.gpu_vram_per_gpu_gb,
+        "gpu_total_vram_gb": gpu_total_vram_gb,
+        "total_rps": rps_total,
         "eligible_intent_ratio": eligible_intent_ratio,
+        "intent_eligible_rps": intent_eligible_rps,
         "actual_total_intent_share": actual_intent_share,
         "intent_rps": intent_rps,
         "cpu_ms_per_request": cpu_ms_per_request,
@@ -201,7 +230,7 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
         "gpu_utilization": gpu_util,
         "gpu_status": status(gpu_util, config.gpu_degraded_util, config.gpu_high_risk_util),
         "gpu_vram_gb": gpu_vram_gb,
-        "gpu_vram_utilization": gpu_vram_gb / config.gpu_vram_gb,
+        "gpu_vram_utilization": gpu_vram_gb / gpu_total_vram_gb,
         "required_gpus_for_70pct_util": required_gpus_70pct,
         "network_bandwidth_gbps": bandwidth_gbps,
         "network_utilization": network_util,
@@ -211,13 +240,17 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
         "p99_latency_ms": p99_latency,
         "system_status": "unstable" if unstable else status(bottleneck_util, 0.70, 0.85),
     }
+    for event in EVENTS:
+        result[f"{event.name}_per_user_per_hour"] = event.per_user_per_hour
+        result[f"{event.name}_rps"] = event_rps(config, event)
+    return result
 
 
 def write_csv(rows: Iterable[Dict[str, float | str]], path: Path) -> None:
     rows = list(rows)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()), lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow({key: fmt(value) if isinstance(value, float) else value for key, value in row.items()})
@@ -245,8 +278,8 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
     plt.plot(x, [float(r["network_utilization"]) * 100.0 for r in rows], marker="o", label="Network")
     plt.axhline(70, color="tab:orange", linestyle="--", linewidth=1, label="70% threshold")
     plt.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
-    plt.xlabel("Intent ratio among eligible requests (%)")
-    plt.ylabel("Utilization (%)")
+    plt.xlabel("Eligible intent ratio (%)")
+    plt.ylabel("Resource utilization (%)")
     plt.title("Resource utilization vs. intent ratio")
     plt.grid(True, alpha=0.3)
     plt.legend()
@@ -258,7 +291,7 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
     plt.plot(x, finite_series("mean_latency_ms"), marker="o", label="mean")
     plt.plot(x, finite_series("p95_latency_ms"), marker="o", label="p95")
     plt.plot(x, finite_series("p99_latency_ms"), marker="o", label="p99")
-    plt.xlabel("Intent ratio among eligible requests (%)")
+    plt.xlabel("Eligible intent ratio (%)")
     plt.ylabel("Latency (ms)")
     plt.title("Control-plane latency vs. intent ratio")
     plt.grid(True, alpha=0.3)
@@ -274,8 +307,8 @@ def main() -> None:
     out_dir = Path("outputs")
     write_csv(rows, out_dir / "agentic_resource_results.csv")
     sensitivity_rows = [
-        evaluate(replace(config, total_rps=total_rps), ratio)
-        for total_rps in SENSITIVITY_RPS
+        evaluate(replace(config, user_count=user_count), ratio)
+        for user_count in SENSITIVITY_USERS
         for ratio in INTENT_SETTINGS
     ]
     write_csv(sensitivity_rows, out_dir / "agentic_resource_sensitivity.csv")

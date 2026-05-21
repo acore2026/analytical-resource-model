@@ -164,7 +164,7 @@ h2 {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(310px, 390px) minmax(0, 1fr);
+  grid-template-columns: minmax(380px, 520px) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -206,6 +206,10 @@ h2 {
   color: #ffffff;
   font-weight: 900;
   font-size: 12px;
+}
+
+.panel-code.mini {
+  background: var(--accent-2);
 }
 
 .field {
@@ -342,10 +346,15 @@ input[type="range"] {
 }
 
 .mix-grid,
+.event-grid,
 .split-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.event-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .split-grid {
@@ -364,6 +373,35 @@ input[type="range"] {
   color: var(--quiet);
   font-size: 12px;
   margin: 0;
+  line-height: 1.45;
+}
+
+.event-summary {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.event-table-wrap {
+  max-height: 264px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: #fbfcf8;
+}
+
+.event-table {
+  min-width: 0;
+  font-size: 12px;
+}
+
+.event-table th,
+.event-table td {
+  padding: 8px 9px;
+}
+
+.event-table th:first-child,
+.event-table td:first-child {
+  min-width: 152px;
 }
 
 .reset {
@@ -495,7 +533,44 @@ input[type="range"] {
   padding: 18px;
 }
 
+.chart-description {
+  color: var(--muted);
+  margin: -4px 0 14px;
+  line-height: 1.45;
+}
+
+.chart-frame {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 8px 10px;
+  align-items: center;
+}
+
+.axis-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.y-axis {
+  grid-column: 1;
+  grid-row: 1;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  justify-self: center;
+}
+
+.x-axis {
+  grid-column: 2;
+  grid-row: 2;
+  text-align: center;
+}
+
 canvas {
+  grid-column: 2;
+  grid-row: 1;
   display: block;
   width: 100%;
   height: auto;
@@ -589,6 +664,7 @@ tr:last-child td {
   }
 
   .mix-grid,
+  .event-grid,
   .split-grid,
   .metric-strip,
   .latency-board,
@@ -602,5 +678,21 @@ tr:last-child td {
   .latency-note {
     min-height: auto;
     padding: 16px;
+  }
+
+  .chart-frame {
+    grid-template-columns: 1fr;
+  }
+
+  .y-axis,
+  .x-axis,
+  canvas {
+    grid-column: 1;
+  }
+
+  .y-axis {
+    writing-mode: horizontal-tb;
+    transform: none;
+    justify-self: start;
   }
 }

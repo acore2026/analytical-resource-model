@@ -1,41 +1,52 @@
-type ProcedureKey = "registration" | "pdu" | "service";
+type EventKey =
+  | "initialRegistration"
+  | "periodicRegistration"
+  | "mobilityRegistration"
+  | "initialPdu"
+  | "pduRelease"
+  | "pduModification"
+  | "serviceRequest"
+  | "anRelease"
+  | "handover"
+  | "paging";
 type SystemStatus = "stable" | "degraded" | "high_risk" | "unstable";
 type Lang = "en" | "zh";
 
 interface Baseline {
-  totalRps: number;
+  userCount: number;
+  pduSessionsPerUser: number;
   intentRatio: number;
-  mixRegistration: number;
-  mixPdu: number;
-  mixService: number;
   cpuCores: number;
   nicGbps: number;
   ramGb: number;
-  vramGb: number;
-  gpuCapacity: number;
+  gpuCount: number;
+  gpuVramPerGpuGb: number;
+  gpuCapacityPerGpu: number;
   nonIntentCpu: number;
   intentCpu: number;
   intentGpuMs: number;
   intentBandwidthKb: number;
 }
 
-interface Procedure {
-  key: ProcedureKey;
+interface EventDefinition {
+  key: EventKey;
+  inputId: string;
+  labelKey: string;
+  tipKey: string;
+  perUserPerHour: number;
   baseLatencyMs: number;
   baseCpuMs: number;
   baseBandwidthKb: number;
   intentEligible: boolean;
 }
 
-interface Mix {
-  registration: number;
-  pdu: number;
-  service: number;
+interface EventLoad extends EventDefinition {
+  rps: number;
 }
 
 interface Result {
   totalRps: number;
-  eligibleMix: number;
+  eligibleRps: number;
   intentRatio: number;
   actualIntentShare: number;
   intentRps: number;
@@ -58,68 +69,90 @@ interface Result {
   cpuStatus: SystemStatus;
   gpuStatus: SystemStatus;
   netStatus: SystemStatus;
+  events: EventLoad[];
 }
 
 const BASELINE: Baseline = {
-  totalRps: 10000,
+  userCount: 3600000,
+  pduSessionsPerUser: 2,
   intentRatio: 10,
-  mixRegistration: 20,
-  mixPdu: 30,
-  mixService: 50,
-  cpuCores: 64,
+  cpuCores: 256,
   nicGbps: 100,
   ramGb: 256,
-  vramGb: 24,
-  gpuCapacity: 2000,
+  gpuCount: 20,
+  gpuVramPerGpuGb: 24,
+  gpuCapacityPerGpu: 2000,
   nonIntentCpu: 0.3,
   intentCpu: 2.0,
   intentGpuMs: 8,
   intentBandwidthKb: 12
 };
 
-const PROCEDURES: Procedure[] = [
-  { key: "registration", baseLatencyMs: 30, baseCpuMs: 2.0, baseBandwidthKb: 12, intentEligible: false },
-  { key: "pdu", baseLatencyMs: 40, baseCpuMs: 2.5, baseBandwidthKb: 16, intentEligible: true },
-  { key: "service", baseLatencyMs: 20, baseCpuMs: 1.2, baseBandwidthKb: 8, intentEligible: true }
+const EVENTS: EventDefinition[] = [
+  { key: "initialRegistration", inputId: "eventInitialRegistration", labelKey: "initialRegistration", tipKey: "initialRegistrationTip", perUserPerHour: 0.1, baseLatencyMs: 30, baseCpuMs: 2.0, baseBandwidthKb: 12, intentEligible: false },
+  { key: "periodicRegistration", inputId: "eventPeriodicRegistration", labelKey: "periodicRegistration", tipKey: "periodicRegistrationTip", perUserPerHour: 0.1, baseLatencyMs: 25, baseCpuMs: 1.5, baseBandwidthKb: 10, intentEligible: false },
+  { key: "mobilityRegistration", inputId: "eventMobilityRegistration", labelKey: "mobilityRegistration", tipKey: "mobilityRegistrationTip", perUserPerHour: 7.0, baseLatencyMs: 30, baseCpuMs: 2.0, baseBandwidthKb: 12, intentEligible: false },
+  { key: "initialPdu", inputId: "eventInitialPdu", labelKey: "initialPdu", tipKey: "initialPduTip", perUserPerHour: 1.0, baseLatencyMs: 40, baseCpuMs: 2.5, baseBandwidthKb: 16, intentEligible: true },
+  { key: "pduRelease", inputId: "eventPduRelease", labelKey: "pduRelease", tipKey: "pduReleaseTip", perUserPerHour: 1.0, baseLatencyMs: 25, baseCpuMs: 1.5, baseBandwidthKb: 10, intentEligible: false },
+  { key: "pduModification", inputId: "eventPduModification", labelKey: "pduModification", tipKey: "pduModificationTip", perUserPerHour: 2.0, baseLatencyMs: 30, baseCpuMs: 2.0, baseBandwidthKb: 12, intentEligible: true },
+  { key: "serviceRequest", inputId: "eventServiceRequest", labelKey: "serviceRequest", tipKey: "serviceRequestTip", perUserPerHour: 21.0, baseLatencyMs: 20, baseCpuMs: 1.2, baseBandwidthKb: 8, intentEligible: true },
+  { key: "anRelease", inputId: "eventAnRelease", labelKey: "anRelease", tipKey: "anReleaseTip", perUserPerHour: 35.0, baseLatencyMs: 15, baseCpuMs: 0.8, baseBandwidthKb: 6, intentEligible: false },
+  { key: "handover", inputId: "eventHandover", labelKey: "handover", tipKey: "handoverTip", perUserPerHour: 23.1, baseLatencyMs: 25, baseCpuMs: 1.8, baseBandwidthKb: 12, intentEligible: false },
+  { key: "paging", inputId: "eventPaging", labelKey: "paging", tipKey: "pagingTip", perUserPerHour: 14.0, baseLatencyMs: 12, baseCpuMs: 0.6, baseBandwidthKb: 4, intentEligible: false }
 ];
 
 const SWEEP = [0, 1, 5, 10, 20, 50, 100];
-const INPUT_IDS = [
-  "totalRps",
+const MODEL_INPUT_IDS = [
+  "userCount",
+  "pduSessionsPerUser",
   "intentRatio",
-  "mixRegistration",
-  "mixPdu",
-  "mixService",
   "cpuCores",
   "nicGbps",
   "ramGb",
-  "vramGb",
-  "gpuCapacity",
+  "gpuCount",
+  "gpuVramPerGpuGb",
+  "gpuCapacityPerGpu",
   "nonIntentCpu",
   "intentCpu",
   "intentGpuMs",
   "intentBandwidthKb"
 ] as const;
-
-type InputId = typeof INPUT_IDS[number];
+const INPUT_IDS = [...MODEL_INPUT_IDS, ...EVENTS.map((event) => event.inputId)] as const;
 
 const I18N: Record<Lang, Record<string, string>> = {
   en: {
     modelMarkdown: "Model markdown",
     open: "OPEN",
-    traffic: "Traffic",
+    userModel: "User Model",
+    eventRates: "Event Rates",
     cluster: "Cluster",
     agentCost: "Agent Cost",
-    totalRequestRate: "Total request rate",
-    intentRatio: "Intent ratio among eligible procedures",
-    registration: "Registration",
-    pduSession: "PDU session",
+    userCount: "User count",
+    pduSessionsPerUser: "PDU sessions per user",
+    intentRatio: "Intent ratio among eligible events",
+    initialRegistration: "Initial registration",
+    periodicRegistration: "Periodic registration",
+    mobilityRegistration: "Mobility registration",
+    initialPdu: "Initial PDU establishment",
+    pduRelease: "PDU session release",
+    pduModification: "PDU session modification",
     serviceRequest: "Service request",
+    anRelease: "AN release",
+    handover: "Handover",
+    paging: "Paging",
+    derivedTraffic: "Derived Traffic",
+    eventName: "Event",
+    perUserHour: "Per user/hour",
+    derivedRps: "Request/s",
+    eligible: "Intent",
+    yes: "Yes",
+    no: "No",
     cpuCores: "CPU cores",
     nicCapacity: "NIC capacity",
     ramCapacity: "RAM capacity",
-    vramCapacity: "VRAM capacity",
-    gpuIntentCapacity: "GPU intent inference capacity",
+    gpuCount: "GPU count",
+    vramPerGpu: "VRAM per GPU",
+    gpuIntentCapacity: "GPU capacity per GPU",
     nonIntentCpuCost: "Non-intent CPU cost",
     intentCpuCost: "Intent CPU cost",
     intentInferenceLatency: "Intent inference latency",
@@ -133,6 +166,10 @@ const I18N: Record<Lang, Record<string, string>> = {
     p95LatencyMetric: "p95 latency (ms)",
     p99LatencyMetric: "p99 latency (ms)",
     intentSweep: "Intent Sweep",
+    intentSweepDescription: "X-axis: intent-bearing share within eligible events. Y-axis: CPU, GPU, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.",
+    xAxisLabel: "Eligible intent ratio (%)",
+    yAxisLabel: "Resource utilization (%)",
+    intentSweepAria: "Line chart showing CPU, GPU, and network utilization by eligible intent ratio.",
     calculatedSweep: "Calculated Sweep",
     tableEligibleIntent: "Eligible intent (%)",
     tableTotalIntent: "Total intent (%)",
@@ -142,27 +179,39 @@ const I18N: Record<Lang, Record<string, string>> = {
     tableBw: "BW (Gbps)",
     tableMean: "Mean (ms)",
     tableStatus: "Status",
-    totalRequestRateTip: "Offered control-plane request arrival rate across registration, PDU session establishment, and service request.",
-    intentRatioTip: "Share of PDU session establishment and service request messages that carry intent. Registration is non-intent in this model.",
-    registrationTip: "Traffic mix weight for UE registration requests. Mix values are normalized automatically.",
-    pduSessionTip: "Traffic mix weight for PDU session establishment requests. Intent can apply to this procedure.",
-    serviceRequestTip: "Traffic mix weight for service request messages. Intent can apply to this procedure.",
+    userCountTip: "Number of users represented by the model. Event request rates scale linearly with this value.",
+    pduSessionsPerUserTip: "Average PDU sessions per user. It is a scenario descriptor; change event frequencies to model session-driven traffic changes.",
+    intentRatioTip: "Share of initial PDU establishment, PDU modification, and service request events that carry user intent.",
+    initialRegistrationTip: "How often one user triggers initial registration in one hour.",
+    periodicRegistrationTip: "How often one user triggers periodic registration update in one hour.",
+    mobilityRegistrationTip: "How often one user triggers mobility registration update in one hour.",
+    initialPduTip: "How often one user establishes an initial PDU session in one hour. This event is intent-eligible.",
+    pduReleaseTip: "How often one user releases a PDU session in one hour.",
+    pduModificationTip: "How often one user modifies a PDU session in one hour. This event is intent-eligible.",
+    serviceRequestTip: "How often one user triggers service request in one hour. This event is intent-eligible.",
+    anReleaseTip: "How often one user triggers access-network release in one hour.",
+    handoverTip: "How often one user performs handover in one hour.",
+    pagingTip: "How often one user receives paging in one hour.",
     cpuCoresTip: "Total CPU core capacity available to deterministic procedure handling and CPU-side agent logic.",
     nicCapacityTip: "Network interface capacity available for control-plane message traffic.",
     ramCapacityTip: "Host memory capacity for agent/NF processes, active request contexts, and runtime state.",
-    vramCapacityTip: "Accelerator memory available for the inference model and active intent request state.",
-    gpuIntentCapacityTip: "Maximum intent-bearing requests the accelerator can process per second before queueing becomes unstable.",
+    gpuCountTip: "Number of GPUs in the inference pool.",
+    vramPerGpuTip: "Accelerator memory available on each GPU for the inference model and active intent request state.",
+    gpuIntentCapacityTip: "Maximum intent-bearing requests one GPU can process per second before queueing becomes unstable.",
     nonIntentCpuCostTip: "CPU-ms means one CPU core occupied for one millisecond. 0.3 CPU-ms is 0.3 ms on one core, or equivalent parallel CPU work.",
     intentCpuCostTip: "CPU-side agent work for intent parsing, constraints, planning, and tool-wrapper handling outside GPU inference.",
     intentInferenceLatencyTip: "Per-request accelerator inference service time before queueing delay.",
     intentExtraBandwidthTip: "Additional control-plane message bytes caused by agent-tool wrappers and inter-agent task messages.",
     allRequests: "of all requests",
-    normalizedMix: "Normalized mix",
+    totalTraffic: "Total traffic",
+    eligibleTraffic: "eligible for intent",
+    users: "users",
+    sessionsPerUser: "PDU sessions/user",
     bottleneck: "Bottleneck",
     intentTraffic: "Intent traffic is",
     gpu70: "keeping GPU utilization at or below 70% requires",
-    accelerator: "accelerator",
-    accelerators: "accelerators",
+    accelerator: "GPU",
+    accelerators: "GPUs",
     stable: "stable",
     degraded: "degraded",
     high_risk: "high risk",
@@ -177,19 +226,36 @@ const I18N: Record<Lang, Record<string, string>> = {
   zh: {
     modelMarkdown: "模型说明文档",
     open: "打开",
-    traffic: "流量",
+    userModel: "用户模型",
+    eventRates: "事件速率",
     cluster: "集群",
     agentCost: "Agent 成本",
-    totalRequestRate: "总请求速率",
-    intentRatio: "可携带意图流程中的意图比例",
-    registration: "注册",
-    pduSession: "PDU 会话",
+    userCount: "用户数",
+    pduSessionsPerUser: "每用户 PDU 会话数",
+    intentRatio: "可携带意图事件中的意图比例",
+    initialRegistration: "初始注册",
+    periodicRegistration: "周期注册",
+    mobilityRegistration: "移动性注册",
+    initialPdu: "初始 PDU 建立",
+    pduRelease: "PDU 会话释放",
+    pduModification: "PDU 会话修改",
     serviceRequest: "业务请求",
+    anRelease: "AN 释放",
+    handover: "切换",
+    paging: "寻呼",
+    derivedTraffic: "推导流量",
+    eventName: "事件",
+    perUserHour: "每用户每小时",
+    derivedRps: "请求/秒",
+    eligible: "意图",
+    yes: "是",
+    no: "否",
     cpuCores: "CPU 核数",
     nicCapacity: "网卡容量",
     ramCapacity: "内存容量",
-    vramCapacity: "显存容量",
-    gpuIntentCapacity: "GPU 意图推理能力",
+    gpuCount: "GPU 数量",
+    vramPerGpu: "每 GPU 显存",
+    gpuIntentCapacity: "单 GPU 推理能力",
     nonIntentCpuCost: "非意图 CPU 成本",
     intentCpuCost: "意图 CPU 成本",
     intentInferenceLatency: "意图推理时延",
@@ -203,6 +269,10 @@ const I18N: Record<Lang, Record<string, string>> = {
     p95LatencyMetric: "p95 时延（ms）",
     p99LatencyMetric: "p99 时延（ms）",
     intentSweep: "意图比例扫描",
+    intentSweepDescription: "横轴表示可携带意图事件中真正携带意图的比例。纵轴表示 CPU、GPU 和网络利用率。总请求速率由用户数和事件频率推导，因此在该扫描中保持不变。",
+    xAxisLabel: "可携带意图比例（%）",
+    yAxisLabel: "资源利用率（%）",
+    intentSweepAria: "折线图，展示不同可携带意图比例下的 CPU、GPU 和网络利用率。",
     calculatedSweep: "计算结果扫描",
     tableEligibleIntent: "可携带意图比例（%）",
     tableTotalIntent: "总意图比例（%）",
@@ -212,27 +282,39 @@ const I18N: Record<Lang, Record<string, string>> = {
     tableBw: "带宽（Gbps）",
     tableMean: "平均值（ms）",
     tableStatus: "状态",
-    totalRequestRateTip: "注册、PDU 会话建立和业务请求的控制面总到达速率。",
-    intentRatioTip: "PDU 会话建立和业务请求中携带意图的比例。本模型中注册流程不携带意图。",
-    registrationTip: "UE 注册请求在流量混合中的权重。三个权重会自动归一化。",
-    pduSessionTip: "PDU 会话建立请求在流量混合中的权重。该流程可携带意图。",
-    serviceRequestTip: "业务请求在流量混合中的权重。该流程可携带意图。",
+    userCountTip: "模型中的用户数量。事件请求速率会随该值线性变化。",
+    pduSessionsPerUserTip: "平均每用户 PDU 会话数。该值作为场景描述；如需建模会话驱动的流量变化，请调整事件频率。",
+    intentRatioTip: "初始 PDU 建立、PDU 会话修改和业务请求中携带用户意图的比例。",
+    initialRegistrationTip: "单个用户在一小时内触发初始注册的次数。",
+    periodicRegistrationTip: "单个用户在一小时内触发周期注册更新的次数。",
+    mobilityRegistrationTip: "单个用户在一小时内触发移动性注册更新的次数。",
+    initialPduTip: "单个用户在一小时内建立初始 PDU 会话的次数。该事件可携带意图。",
+    pduReleaseTip: "单个用户在一小时内释放 PDU 会话的次数。",
+    pduModificationTip: "单个用户在一小时内修改 PDU 会话的次数。该事件可携带意图。",
+    serviceRequestTip: "单个用户在一小时内触发业务请求的次数。该事件可携带意图。",
+    anReleaseTip: "单个用户在一小时内触发接入网释放的次数。",
+    handoverTip: "单个用户在一小时内发生切换的次数。",
+    pagingTip: "单个用户在一小时内收到寻呼的次数。",
     cpuCoresTip: "可用于确定性流程处理和 Agent CPU 侧逻辑的总 CPU 核数。",
     nicCapacityTip: "可用于控制面消息传输的网卡容量。",
     ramCapacityTip: "主机内存容量，用于 Agent/NF 进程、活跃请求上下文和运行状态。",
-    vramCapacityTip: "加速器显存容量，用于推理模型和活跃意图请求状态。",
-    gpuIntentCapacityTip: "推理队列失稳前，单个加速器每秒可处理的意图请求数。",
+    gpuCountTip: "推理池中的 GPU 数量。",
+    vramPerGpuTip: "每个 GPU 上可用于推理模型和活跃意图请求状态的加速器显存。",
+    gpuIntentCapacityTip: "推理队列失稳前，单个 GPU 每秒可处理的意图请求数。",
     nonIntentCpuCostTip: "CPU-ms 表示一个 CPU 核占用一毫秒。0.3 CPU-ms 等价于单核 0.3 ms 的计算量。",
     intentCpuCostTip: "意图解析、约束检查、规划和工具封装等 GPU 推理之外的 CPU 侧 Agent 工作量。",
     intentInferenceLatencyTip: "不含排队延迟时，单个意图请求的加速器推理服务时间。",
     intentExtraBandwidthTip: "由 Agent-Tool 封装和 Agent 间任务消息带来的额外控制面消息字节数。",
     allRequests: "占全部请求",
-    normalizedMix: "归一化流量混合",
+    totalTraffic: "总流量",
+    eligibleTraffic: "可携带意图",
+    users: "用户",
+    sessionsPerUser: "PDU 会话/用户",
     bottleneck: "瓶颈",
     intentTraffic: "意图流量为",
     gpu70: "若保持 GPU 利用率不超过 70%，需要",
-    accelerator: "个加速器",
-    accelerators: "个加速器",
+    accelerator: "个 GPU",
+    accelerators: "个 GPU",
     stable: "稳定",
     degraded: "退化",
     high_risk: "高风险",
@@ -256,28 +338,6 @@ function statusText(name: SystemStatus): string {
   return t(name);
 }
 
-function applyTranslations(): void {
-  document.documentElement.lang = currentLang === "zh" ? "zh-CN" : "en";
-  document.querySelectorAll<HTMLElement>("[data-i18n]").forEach((node) => {
-    const key = node.dataset.i18n;
-    if (key) node.textContent = t(key);
-  });
-  document.querySelectorAll<HTMLElement>("[data-tip-key]").forEach((node) => {
-    const key = node.dataset.tipKey;
-    if (key) node.dataset.tip = t(key);
-  });
-  const langToggle = mustGet<HTMLButtonElement>("langToggle");
-  langToggle.textContent = currentLang === "en" ? "中文" : "English";
-  langToggle.setAttribute(
-    "aria-label",
-    currentLang === "en" ? "Switch to Chinese" : "切换到英文"
-  );
-  const docLink = mustGet<HTMLAnchorElement>("docLink");
-  docLink.href = currentLang === "zh"
-    ? "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_resource_model_zh.md"
-    : "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_resource_model.md";
-}
-
 function mustGet<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
   if (!node) {
@@ -288,29 +348,15 @@ function mustGet<T extends HTMLElement>(id: string): T {
 
 const input = Object.fromEntries(
   INPUT_IDS.map((id) => [id, mustGet<HTMLInputElement>(id)])
-) as Record<InputId, HTMLInputElement>;
+) as Record<string, HTMLInputElement>;
 
-function num(id: InputId): number {
+function num(id: string): number {
   const value = Number(input[id].value);
   return Number.isFinite(value) ? value : 0;
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-function normalizedMix(): Mix {
-  const raw = {
-    registration: Math.max(0, num("mixRegistration")),
-    pdu: Math.max(0, num("mixPdu")),
-    service: Math.max(0, num("mixService"))
-  };
-  const total = raw.registration + raw.pdu + raw.service || 1;
-  return {
-    registration: raw.registration / total,
-    pdu: raw.pdu / total,
-    service: raw.service / total
-  };
 }
 
 function queueDelayMs(util: number, serviceMs: number): number {
@@ -339,17 +385,37 @@ function pct(value: number, digits = 1): string {
   return `${(value * 100).toFixed(digits)}%`;
 }
 
-function evaluate(intentRatioPercent = num("intentRatio")): Result {
-  const mix = normalizedMix();
-  const totalRps = Math.max(1, num("totalRps"));
-  const intentRatio = clamp(intentRatioPercent / 100, 0, 1);
-  const eligibleMix = mix.pdu + mix.service;
-  const actualIntentShare = eligibleMix * intentRatio;
-  const intentRps = totalRps * actualIntentShare;
+function eventLoads(): EventLoad[] {
+  const users = Math.max(0, num("userCount"));
+  return EVENTS.map((event) => {
+    const perUserPerHour = Math.max(0, num(event.inputId));
+    return {
+      ...event,
+      perUserPerHour,
+      rps: users * perUserPerHour / 3600
+    };
+  });
+}
 
-  const baseCpuAvg = PROCEDURES.reduce((sum, proc) => sum + mix[proc.key] * proc.baseCpuMs, 0);
-  const baseBandwidthAvg = PROCEDURES.reduce((sum, proc) => sum + mix[proc.key] * proc.baseBandwidthKb, 0);
-  const baseLatencyAvg = PROCEDURES.reduce((sum, proc) => sum + mix[proc.key] * proc.baseLatencyMs, 0);
+function weightedAverage(events: EventLoad[], totalRps: number, key: keyof EventDefinition): number {
+  if (totalRps <= 0) return 0;
+  return events.reduce((sum, event) => {
+    const value = event[key];
+    return typeof value === "number" ? sum + event.rps * value : sum;
+  }, 0) / totalRps;
+}
+
+function evaluate(intentRatioPercent = num("intentRatio")): Result {
+  const events = eventLoads();
+  const totalRps = events.reduce((sum, event) => sum + event.rps, 0);
+  const eligibleRps = events.filter((event) => event.intentEligible).reduce((sum, event) => sum + event.rps, 0);
+  const intentRatio = clamp(intentRatioPercent / 100, 0, 1);
+  const intentRps = eligibleRps * intentRatio;
+  const actualIntentShare = totalRps > 0 ? intentRps / totalRps : 0;
+
+  const baseCpuAvg = weightedAverage(events, totalRps, "baseCpuMs");
+  const baseBandwidthAvg = weightedAverage(events, totalRps, "baseBandwidthKb");
+  const baseLatencyAvg = weightedAverage(events, totalRps, "baseLatencyMs");
 
   const cpuMsPerRequest = baseCpuAvg
     + actualIntentShare * Math.max(0, num("intentCpu"))
@@ -364,14 +430,17 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
   const networkUtil = networkGbps / Math.max(1, num("nicGbps"));
   const networkDelay = queueDelayMs(networkUtil, 0.1);
 
-  const gpuCapacity = Math.max(1, num("gpuCapacity"));
-  const gpuUtil = intentRps / gpuCapacity;
-  const gpuQueueDelay = queueDelayMs(gpuUtil, 1000 / gpuCapacity);
+  const gpuCount = Math.max(0, num("gpuCount"));
+  const gpuCapacityPerGpu = Math.max(1, num("gpuCapacityPerGpu"));
+  const gpuTotalCapacity = gpuCount * gpuCapacityPerGpu;
+  const gpuUtil = gpuTotalCapacity > 0 ? intentRps / gpuTotalCapacity : Infinity;
+  const gpuQueueDelay = queueDelayMs(gpuUtil, 1000 / Math.max(1, gpuTotalCapacity));
   const intentGpuLatency = Math.max(0, num("intentGpuMs")) + gpuQueueDelay;
 
   const activeIntentRequests = intentRps * Math.max(0, num("intentGpuMs")) / 1000;
-  const gpuVramGb = intentRps > 0 ? 16 + activeIntentRequests * 4 / 1024 : 0;
-  const gpuVramUtil = gpuVramGb / Math.max(1, num("vramGb"));
+  const activeGpuCount = intentRps > 0 ? Math.min(gpuCount, Math.ceil(intentRps / gpuCapacityPerGpu)) : 0;
+  const gpuVramGb = intentRps > 0 ? activeGpuCount * 16 + activeIntentRequests * 4 / 1024 : 0;
+  const gpuVramUtil = gpuVramGb / Math.max(1, gpuCount * Math.max(1, num("gpuVramPerGpuGb")));
 
   const activeRequests = totalRps * baseLatencyAvg / 1000;
   const ramGb = 32 + activeRequests * 128 / 1024 / 1024;
@@ -381,11 +450,12 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
   const memoryTrafficGbps = totalRps * memoryTrafficKb * 8 / 1000000;
 
   let meanLatency = 0;
-  for (const proc of PROCEDURES) {
-    const procIntentShare = proc.intentEligible ? intentRatio : 0;
-    const nonIntentLatency = proc.baseLatencyMs + 1 + cpuDelay + networkDelay;
-    const intentLatency = proc.baseLatencyMs + 4 + Math.max(0, num("intentCpu")) + intentGpuLatency + cpuDelay + networkDelay;
-    meanLatency += mix[proc.key] * ((1 - procIntentShare) * nonIntentLatency + procIntentShare * intentLatency);
+  for (const event of events) {
+    const eventShare = totalRps > 0 ? event.rps / totalRps : 0;
+    const eventIntentShare = event.intentEligible ? intentRatio : 0;
+    const nonIntentLatency = event.baseLatencyMs + 1 + cpuDelay + networkDelay;
+    const intentLatency = event.baseLatencyMs + 4 + Math.max(0, num("intentCpu")) + intentGpuLatency + cpuDelay + networkDelay;
+    meanLatency += eventShare * ((1 - eventIntentShare) * nonIntentLatency + eventIntentShare * intentLatency);
   }
 
   const bottleneckUtil = Math.max(cpuUtil, gpuUtil, networkUtil);
@@ -401,11 +471,11 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
   }
 
   const systemStatus: SystemStatus = unstable ? "unstable" : classifyStatus(bottleneckUtil);
-  const requiredGpus70 = intentRps > 0 ? Math.ceil(intentRps / (gpuCapacity * 0.7)) : 0;
+  const requiredGpus70 = intentRps > 0 ? Math.ceil(intentRps / (gpuCapacityPerGpu * 0.7)) : 0;
 
   return {
     totalRps,
-    eligibleMix,
+    eligibleRps,
     intentRatio,
     actualIntentShare,
     intentRps,
@@ -427,7 +497,8 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
     systemStatus,
     cpuStatus: classifyStatus(cpuUtil),
     gpuStatus: classifyStatus(gpuUtil),
-    netStatus: classifyStatus(networkUtil)
+    netStatus: classifyStatus(networkUtil),
+    events
   };
 }
 
@@ -454,11 +525,23 @@ function bottleneckLabel(result: Result): string {
   return pairs[0][0];
 }
 
+function updateEventTable(result: Result): void {
+  const tbody = mustGet<HTMLTableSectionElement>("eventTable");
+  tbody.innerHTML = result.events.map((event) => `
+    <tr>
+      <td>${t(event.labelKey)}</td>
+      <td>${fmt(event.perUserPerHour, 2)}</td>
+      <td>${fmt(event.rps, 0)}</td>
+      <td>${event.intentEligible ? t("yes") : t("no")}</td>
+    </tr>
+  `).join("");
+}
+
 function updateSummary(result: Result): void {
   mustGet("intentRatioLabel").textContent = `${Math.round(result.intentRatio * 100)}%`;
   mustGet("actualIntentLabel").textContent = `${pct(result.actualIntentShare)} ${t("allRequests")}`;
-  const mix = normalizedMix();
-  mustGet("mixHint").textContent = `${t("normalizedMix")}: ${t("registration")} ${pct(mix.registration)}, ${t("pduSession")} ${pct(mix.pdu)}, ${t("serviceRequest")} ${pct(mix.service)}.`;
+  mustGet("trafficHint").textContent =
+    `${t("totalTraffic")}: ${fmt(result.totalRps, 0)} req/s; ${fmt(result.eligibleRps, 0)} req/s ${t("eligibleTraffic")}; ${fmt(num("userCount"), 0)} ${t("users")}; ${fmt(num("pduSessionsPerUser"), 1)} ${t("sessionsPerUser")}.`;
 
   mustGet("cpuDemand").textContent = `${fmt(result.cpuCoreDemand, 1)} ${t("coresUnit")}`;
   mustGet("ramDemand").textContent = `${fmt(result.ramGb, 1)} GB`;
@@ -485,6 +568,7 @@ function updateSummary(result: Result): void {
     ? t("accelerator")
     : (gpus === 1 ? t("accelerator") : t("accelerators"));
   mustGet("bottleneckNote").textContent = `${t("bottleneck")}: ${bottleneckLabel(result)}. ${t("intentTraffic")} ${fmt(result.intentRps, 0)} req/s; ${t("gpu70")} ${gpus} ${acceleratorLabel}.`;
+  updateEventTable(result);
 }
 
 function updateTable(rows: Result[]): void {
@@ -514,7 +598,7 @@ function drawChart(rows: Result[]): void {
   ctx.fillStyle = "#fbfcf8";
   ctx.fillRect(0, 0, width, height);
 
-  const pad = { left: 58, right: 24, top: 24, bottom: 44 };
+  const pad = { left: 58, right: 44, top: 24, bottom: 44 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   const x = (index: number) => pad.left + (index / (rows.length - 1)) * plotW;
@@ -569,11 +653,13 @@ function drawChart(rows: Result[]): void {
 
   ctx.fillStyle = "#1d241f";
   ctx.font = "20px Aptos, Segoe UI, sans-serif";
+  ctx.textAlign = "center";
   rows.forEach((row, index) => {
-    ctx.fillText(`${Math.round(row.intentRatio * 100)}%`, x(index) - 14, height - 14);
+    ctx.fillText(`${Math.round(row.intentRatio * 100)}%`, x(index), height - 14);
   });
 
   let legendX = pad.left;
+  ctx.textAlign = "left";
   for (const item of series) {
     ctx.fillStyle = item.color;
     ctx.fillRect(legendX, 18, 14, 14);
@@ -581,6 +667,29 @@ function drawChart(rows: Result[]): void {
     ctx.fillText(item.label, legendX + 20, 32);
     legendX += 110;
   }
+}
+
+function applyTranslations(): void {
+  document.documentElement.lang = currentLang === "zh" ? "zh-CN" : "en";
+  document.querySelectorAll<HTMLElement>("[data-i18n]").forEach((node) => {
+    const key = node.dataset.i18n;
+    if (key) node.textContent = t(key);
+  });
+  document.querySelectorAll<HTMLElement>("[data-tip-key]").forEach((node) => {
+    const key = node.dataset.tipKey;
+    if (key) node.dataset.tip = t(key);
+  });
+  const langToggle = mustGet<HTMLButtonElement>("langToggle");
+  langToggle.textContent = currentLang === "en" ? "中文" : "English";
+  langToggle.setAttribute(
+    "aria-label",
+    currentLang === "en" ? "Switch to Chinese" : "切换到英文"
+  );
+  const docLink = mustGet<HTMLAnchorElement>("docLink");
+  docLink.href = currentLang === "zh"
+    ? "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_resource_model_zh.md"
+    : "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_resource_model.md";
+  mustGet<HTMLCanvasElement>("sweepChart").setAttribute("aria-label", t("intentSweepAria"));
 }
 
 function recompute(): void {
@@ -593,8 +702,11 @@ function recompute(): void {
 
 function reset(): void {
   Object.entries(BASELINE).forEach(([key, value]) => {
-    input[key as InputId].value = String(value);
+    input[key].value = String(value);
   });
+  for (const event of EVENTS) {
+    input[event.inputId].value = String(event.perUserPerHour);
+  }
   recompute();
 }
 
