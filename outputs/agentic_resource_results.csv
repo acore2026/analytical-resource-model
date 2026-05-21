@@ -1,0 +1,8 @@
+total_rps,eligible_intent_ratio,actual_total_intent_share,intent_rps,cpu_ms_per_request,cpu_core_demand,cpu_utilization,cpu_status,ram_gb,ram_utilization,memory_traffic_gbps,gpu_utilization,gpu_status,gpu_vram_gb,gpu_vram_utilization,required_gpus_for_70pct_util,network_bandwidth_gbps,network_utilization,network_status,mean_latency_ms,p95_latency_ms,p99_latency_ms,system_status
+10000.000,0.000,0.000,0.000,2.050,20.500,0.320,stable,32.034,0.125,5.120,0.000,stable,0.000,0.000,0,0.896,0.009,stable,29.967,58.212,78.586,stable
+10000.000,0.010,0.008,80.000,2.064,20.636,0.322,stable,32.034,0.125,5.407,0.040,stable,16.003,0.667,1,0.904,0.009,stable,30.087,58.723,79.276,stable
+10000.000,0.050,0.040,400.000,2.118,21.180,0.331,stable,32.034,0.125,6.554,0.200,stable,16.012,0.667,1,0.934,0.009,stable,30.574,60.819,82.105,stable
+10000.000,0.100,0.080,800.000,2.186,21.860,0.342,stable,32.034,0.125,7.987,0.400,stable,16.025,0.668,1,0.973,0.010,stable,31.202,72.804,98.285,stable
+10000.000,0.200,0.160,1600.000,2.322,23.220,0.363,stable,32.034,0.125,10.854,0.800,degraded,16.050,0.669,2,1.050,0.010,stable,32.723,294.509,397.587,degraded
+10000.000,0.500,0.400,4000.000,2.730,27.300,0.427,stable,32.034,0.125,19.456,2.000,unstable,16.125,0.672,3,1.280,0.013,stable,inf,inf,inf,unstable
+10000.000,1.000,0.800,8000.000,3.410,34.100,0.533,stable,32.034,0.125,33.792,4.000,unstable,16.250,0.677,6,1.664,0.017,stable,inf,inf,inf,unstable
