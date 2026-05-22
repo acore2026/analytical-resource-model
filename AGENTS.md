@@ -45,7 +45,7 @@ Use 4-space indentation for Python and 2-space indentation for TypeScript, HTML,
 
 ## Testing Guidelines
 
-There is no formal test suite yet. For changes to the Python model, run `py_compile` and regenerate outputs. For web app changes, run `tsc -p webapp/tsconfig.json` and verify the page in a browser at `http://127.0.0.1:7108`. Check that the live calculator updates CPU, memory, GPU, bandwidth, and latency when parameters change.
+There is no formal test suite yet. For changes to the Python model, run `py_compile` and regenerate outputs. For web app changes, run `tsc -p webapp/tsconfig.json` and verify the page in a browser at `http://127.0.0.1:7108`. Check that the live calculator updates CPU, memory, NPU, bandwidth, and latency when parameters change.
 
 ## Commit & Pull Request Guidelines
 

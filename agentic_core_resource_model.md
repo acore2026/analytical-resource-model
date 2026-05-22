@@ -43,23 +43,25 @@ The baseline total is `104,300 requests/s`. Intent is only applied to initial PD
 | --- | ---: |
 | CPU cluster capacity | 256 CPU cores = 256,000 CPU-ms/s |
 | RAM capacity | 256 GB |
-| GPU count | 20 GPUs |
-| GPU capacity | 2,000 intent inferences/s/GPU |
-| Total GPU inference capacity | 40,000 intent inferences/s |
-| VRAM capacity | 24 GB/GPU, 480 GB total |
+| NPU count | 8 NPUs |
+| NPU capacity | 4,300 intent inferences/s/NPU |
+| Total NPU inference capacity | 34,400 intent inferences/s |
+| HBM capacity | 32 GB/NPU, 256 GB total |
 | Network capacity | 100 Gbps |
 | Non-intent agent CPU cost | 0.3 CPU-ms/request |
 | Intent agent CPU cost | 2.0 CPU-ms/request |
 | Non-intent agent latency | 1 ms/request |
 | Intent fixed agent latency | 4 ms/request |
-| Intent GPU inference service time | 8 ms/request |
+| Intent NPU inference service time | 8 ms/request |
 | Non-intent memory traffic | 64 KB/request |
 | Intent memory traffic | 512 KB/request |
 | Intent extra bandwidth | 12 KB/request |
-| Fixed inference model memory | 16 GB VRAM per active GPU |
-| Active intent VRAM | 4 MB/active intent request |
+| Fixed inference model memory | 16 GB HBM per active NPU |
+| Active intent HBM | 4 MB/active intent request |
 
 `CPU-ms` means one CPU core occupied for one millisecond. For example, `2 CPU-ms/request` at `100,000 requests/s` consumes `200 CPU cores`.
+
+The NPU reference profile is based on an available `8 x Ascend 910B4` deployment with `32 GB HBM/NPU`. The `4,300 intent inferences/s/NPU` capacity is not a measured 910B4 result. It is the analytical threshold needed for this workload: at the peak modeled intent rate of `24,000 requests/s`, eight NPUs must each sustain about `24,000 / (8 * 0.70) = 4,286 intent inferences/s/NPU` to keep NPU utilization at or below 70%. The model therefore treats per-NPU capacity as a tunable assumption and reports a sensitivity sweep.
 
 ## Derivation of Agentic Cost Assumptions
 
@@ -99,17 +101,17 @@ For intent-bearing requests, the proposal adds semi-structured intent processing
 
 ### Intent Latency
 
-Latency is split into deterministic procedure latency, CPU queueing, fixed agent orchestration latency, and accelerator inference latency. The intent path uses the following pre-queue service-time budget:
+Latency is split into deterministic procedure latency, CPU queueing, fixed agent orchestration latency, and NPU inference latency. The intent path uses the following pre-queue service-time budget:
 
 ```text
 Intent agent latency [ms/request] =
   4 ms fixed orchestration
 + 2 ms CPU-side agent service
-+ 8 ms GPU inference service
++ 8 ms NPU inference service
 = 14 ms/request before queueing
 ```
 
-The `4 ms` fixed orchestration term covers wall-clock processing around parsing, feasibility checking, task-plan construction, tool wrapper creation, and local state update. The `2 ms` CPU-side service term corresponds to the `2.0 CPU-ms/request` intent CPU budget when it is serialized on one core. The `8 ms` GPU term represents nominal model inference service time for intent understanding and plan generation. Queueing delay is then added based on CPU/GPU/network utilization.
+The `4 ms` fixed orchestration term covers wall-clock processing around parsing, feasibility checking, task-plan construction, tool wrapper creation, and local state update. The `2 ms` CPU-side service term corresponds to the `2.0 CPU-ms/request` intent CPU budget when it is serialized on one core. The `8 ms` NPU term represents nominal model inference service time for intent understanding and plan generation. Queueing delay is then added based on CPU/NPU/network utilization.
 
 For non-intent requests, the model uses `1 ms/request` of fixed agent latency because the request follows a fast path: classify, check cached metadata, and invoke the deterministic tool path without semantic inference.
 
@@ -164,11 +166,11 @@ B_net [Gbps] = lambda_total * B_req * 8 / 1,000,000
 u_net [unitless] = B_net / C_net
 ```
 
-GPU utilization is:
+NPU utilization is:
 
 ```text
-u_gpu [unitless] = lambda_I / (N_gpu * mu_gpu)
-N_gpu,70 [GPUs] = ceil(lambda_I / (0.7 * mu_gpu))
+u_npu [unitless] = lambda_I / (N_npu * mu_npu)
+N_npu,70 [NPUs] = ceil(lambda_I / (0.7 * mu_npu))
 ```
 
 Queueing delay uses a simple M/M/1-inspired sensitivity term:
@@ -177,32 +179,42 @@ Queueing delay uses a simple M/M/1-inspired sensitivity term:
 D_queue [ms] = S [ms] * u / (1 - u), for u < 1
 ```
 
-This is an analytical approximation, not a telecom simulator. Mean, p95, and p99 latency are calculated from deterministic procedure latency, fixed agent latency, CPU queueing, GPU inference queueing, and network queueing. A resource is unstable when utilization is at or above 100%.
+This is an analytical approximation, not a telecom simulator. Mean, p95, and p99 latency are calculated from deterministic procedure latency, fixed agent latency, CPU queueing, NPU inference queueing, and network queueing. A resource is unstable when utilization is at or above 100%.
 
 ## Analytical Results
 
 The table below fixes the user population and event frequencies, then varies only the percentage of intent among intent-eligible events.
 
-| Eligible intent ratio | Total intent share | Intent rps | CPU cores | CPU util | Memory traffic | GPU util | GPUs for <=70% | Network bandwidth | Mean latency | p95 latency | Status |
+| Eligible intent ratio | Total intent share | Intent rps | CPU cores | CPU util | Memory traffic | NPU util | NPUs for <=70% | Network bandwidth | Mean latency | p95 latency | Status |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 0% | 0.0% | 0 | 156.8 | 61.3% | 53.402 Gbps | 0.0% | 0 | 6.779 Gbps | 22.9 ms | 95.1 ms | stable |
-| 1% | 0.2% | 240 | 157.2 | 61.4% | 54.262 Gbps | 0.6% | 1 | 6.802 Gbps | 22.9 ms | 95.8 ms | stable |
-| 5% | 1.2% | 1,200 | 158.9 | 62.1% | 57.702 Gbps | 3.0% | 1 | 6.894 Gbps | 23.1 ms | 98.7 ms | stable |
-| 10% | 2.3% | 2,400 | 160.9 | 62.9% | 62.003 Gbps | 6.0% | 2 | 7.010 Gbps | 23.4 ms | 102.5 ms | stable |
-| 20% | 4.6% | 4,800 | 165.0 | 64.4% | 70.605 Gbps | 12.0% | 4 | 7.240 Gbps | 23.9 ms | 110.8 ms | stable |
-| 50% | 11.5% | 12,000 | 177.2 | 69.2% | 96.410 Gbps | 30.0% | 9 | 7.931 Gbps | 25.8 ms | 141.9 ms | stable |
-| 100% | 23.0% | 24,000 | 197.6 | 77.2% | 139.418 Gbps | 60.0% | 18 | 9.083 Gbps | 29.9 ms | 232.3 ms | degraded |
+| 1% | 0.2% | 240 | 157.2 | 61.4% | 54.262 Gbps | 0.7% | 1 | 6.802 Gbps | 22.9 ms | 95.8 ms | stable |
+| 5% | 1.2% | 1,200 | 158.9 | 62.1% | 57.702 Gbps | 3.5% | 1 | 6.894 Gbps | 23.1 ms | 98.7 ms | stable |
+| 10% | 2.3% | 2,400 | 160.9 | 62.9% | 62.003 Gbps | 7.0% | 1 | 7.010 Gbps | 23.4 ms | 102.5 ms | stable |
+| 20% | 4.6% | 4,800 | 165.0 | 64.4% | 70.605 Gbps | 14.0% | 2 | 7.240 Gbps | 23.9 ms | 110.8 ms | stable |
+| 50% | 11.5% | 12,000 | 177.2 | 69.2% | 96.410 Gbps | 34.9% | 4 | 7.931 Gbps | 25.8 ms | 141.9 ms | stable |
+| 100% | 23.0% | 24,000 | 197.6 | 77.2% | 139.418 Gbps | 69.8% | 8 | 9.083 Gbps | 29.9 ms | 232.4 ms | degraded |
 
-Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`.
+Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`. The NPU capacity sensitivity sweep is available in `outputs/agentic_npu_capacity_sensitivity.csv`.
+
+NPU capacity sensitivity at `100%` eligible intent:
+
+| Capacity per NPU | Total NPU capacity | NPU util | NPUs for <=70% | Mean latency | System status |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 2,000 intent/s/NPU | 16,000 intent/s | 150.0% | 18 | unstable | unstable |
+| 3,000 intent/s/NPU | 24,000 intent/s | 100.0% | 12 | unstable | unstable |
+| 4,300 intent/s/NPU | 34,400 intent/s | 69.8% | 8 | 29.9 ms | degraded |
+| 5,000 intent/s/NPU | 40,000 intent/s | 60.0% | 7 | 29.9 ms | degraded |
+| 8,000 intent/s/NPU | 64,000 intent/s | 37.5% | 5 | 29.9 ms | degraded |
 
 ![](outputs/agentic_resource_utilization.png)
 ![](outputs/agentic_latency.png)
 
 ## Interpretation
 
-The event-rate model shows that high concurrency is dominated by frequent service request, AN release, handover, and paging events. With the provisioned 256-core CPU cluster and 20-GPU inference pool, the system remains stable across the full intent sweep. At `100%` eligible-intent traffic, the model becomes CPU-degraded but not unstable: CPU utilization is `77.2%`, GPU utilization is `60.0%`, and control-plane bandwidth is `9.083 Gbps`.
+The event-rate model shows that high concurrency is dominated by frequent service request, AN release, handover, and paging events. With the provisioned 256-core CPU cluster and `8 x 910B4` NPU inference pool, the system remains stable across the full intent sweep if each NPU sustains the assumed `4,300 intent inferences/s/NPU`. At `100%` eligible-intent traffic, the model becomes CPU-degraded but not unstable: CPU utilization is `77.2%`, NPU utilization is `69.8%`, and control-plane bandwidth is `9.083 Gbps`.
 
-The main conclusion is that total user/event load stresses deterministic CPU processing first, while increasing the intent ratio primarily increases GPU utilization, VRAM use, memory traffic, and tail latency. The architecture remains feasible when intent inference is applied selectively, metadata lookup is cached, non-intent paths stay lightweight, and GPU capacity scales with the eligible intent arrival rate.
+The main conclusion is that total user/event load stresses deterministic CPU processing first, while increasing the intent ratio primarily increases NPU utilization, HBM use, memory traffic, and tail latency. The 8-NPU deployment is sufficient for the peak modeled intent load only if measured per-NPU service rate is at least about `4.3k intent inferences/s/NPU` for the selected model, prompt size, batching policy, and concurrency target. If measured throughput is closer to `2k` or `3k intent inferences/s/NPU`, NPU inference becomes unstable at high intent ratios and the deployment requires more NPUs, a smaller model, stronger batching, caching, or admission control.
 
 ## Limitations
 

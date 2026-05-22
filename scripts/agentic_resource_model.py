@@ -32,15 +32,15 @@ class ModelConfig:
     cpu_cores: float = 256.0
     nic_gbps: float = 100.0
     ram_gb: float = 256.0
-    gpu_count: float = 20.0
-    gpu_vram_per_gpu_gb: float = 24.0
-    gpu_capacity_per_gpu_rps: float = 2_000.0
+    npu_count: float = 8.0
+    npu_hbm_per_npu_gb: float = 32.0
+    npu_capacity_per_npu_rps: float = 4_300.0
     cpu_degraded_util: float = 0.70
     cpu_high_risk_util: float = 0.85
-    gpu_degraded_util: float = 0.70
-    gpu_high_risk_util: float = 0.85
+    npu_degraded_util: float = 0.70
+    npu_high_risk_util: float = 0.85
     base_ram_gb: float = 32.0
-    fixed_model_vram_gb: float = 16.0
+    fixed_model_hbm_gb: float = 16.0
     non_intent_agent_cpu_ms: float = 0.3
     non_intent_agent_latency_ms: float = 1.0
     non_intent_mem_traffic_kb: float = 64.0
@@ -48,8 +48,8 @@ class ModelConfig:
     intent_agent_fixed_latency_ms: float = 4.0
     intent_agent_bandwidth_kb: float = 12.0
     intent_mem_traffic_kb: float = 512.0
-    intent_gpu_latency_ms: float = 8.0
-    intent_gpu_active_vram_mb: float = 4.0
+    intent_npu_latency_ms: float = 8.0
+    intent_npu_active_hbm_mb: float = 4.0
     active_context_ram_kb: float = 128.0
 
 
@@ -68,6 +68,7 @@ EVENTS: List[EventType] = [
 
 INTENT_SETTINGS = [0.00, 0.01, 0.05, 0.10, 0.20, 0.50, 1.00]
 SENSITIVITY_USERS = [100_000.0, 1_000_000.0, 3_600_000.0, 10_000_000.0]
+SENSITIVITY_NPU_CAPACITIES = [2_000.0, 3_000.0, 4_300.0, 5_000.0, 8_000.0]
 
 
 def event_rps(config: ModelConfig, event: EventType) -> float:
@@ -115,8 +116,8 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
     intent_eligible_rps = sum(event_rps(config, event) for event in EVENTS if event.intent_eligible)
     intent_rps = intent_eligible_rps * eligible_intent_ratio
     actual_intent_share = intent_rps / rps_total if rps_total > 0 else 0.0
-    gpu_total_capacity_rps = config.gpu_count * config.gpu_capacity_per_gpu_rps
-    gpu_total_vram_gb = config.gpu_count * config.gpu_vram_per_gpu_gb
+    npu_total_capacity_rps = config.npu_count * config.npu_capacity_per_npu_rps
+    npu_total_hbm_gb = config.npu_count * config.npu_hbm_per_npu_gb
 
     base_cpu_ms_avg = weighted_average(config, "base_cpu_ms")
     agent_cpu_ms_avg = (
@@ -137,20 +138,20 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
     network_util = bandwidth_gbps / config.nic_gbps
     network_delay = queue_delay_ms(network_util, 0.1)
 
-    gpu_util = intent_rps / gpu_total_capacity_rps if gpu_total_capacity_rps else math.inf
-    gpu_queue_delay = queue_delay_ms(gpu_util, 1_000.0 / gpu_total_capacity_rps)
-    gpu_inference_latency = config.intent_gpu_latency_ms + gpu_queue_delay
+    npu_util = intent_rps / npu_total_capacity_rps if npu_total_capacity_rps else math.inf
+    npu_queue_delay = queue_delay_ms(npu_util, 1_000.0 / npu_total_capacity_rps)
+    npu_inference_latency = config.intent_npu_latency_ms + npu_queue_delay
 
-    active_intent_requests = intent_rps * config.intent_gpu_latency_ms / 1000.0
-    gpu_vram_gb = 0.0
+    active_intent_requests = intent_rps * config.intent_npu_latency_ms / 1000.0
+    npu_hbm_gb = 0.0
     if intent_rps > 0:
-        active_gpu_count = min(
-            config.gpu_count,
-            math.ceil(intent_rps / config.gpu_capacity_per_gpu_rps)
+        active_npu_count = min(
+            config.npu_count,
+            math.ceil(intent_rps / config.npu_capacity_per_npu_rps)
         )
-        gpu_vram_gb = (
-            active_gpu_count * config.fixed_model_vram_gb
-            + active_intent_requests * config.intent_gpu_active_vram_mb / 1024.0
+        npu_hbm_gb = (
+            active_npu_count * config.fixed_model_hbm_gb
+            + active_intent_requests * config.intent_npu_active_hbm_mb / 1024.0
         )
 
     active_requests = rps_total * (weighted_average(config, "base_latency_ms") / 1000.0)
@@ -165,7 +166,7 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
     memory_traffic_gbps = rps_total * memory_traffic_kb_per_request * 8.0 / 1_000_000.0
 
     mean_latency = 0.0
-    unstable = cpu_util >= 1.0 or gpu_util >= 1.0 or network_util >= 1.0
+    unstable = cpu_util >= 1.0 or npu_util >= 1.0 or network_util >= 1.0
     for event in EVENTS:
         event_share = event_rps(config, event) / rps_total if rps_total > 0 else 0.0
         event_intent_share = eligible_intent_ratio if event.intent_eligible else 0.0
@@ -179,7 +180,7 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
             event.base_latency_ms
             + config.intent_agent_fixed_latency_ms
             + config.intent_agent_cpu_ms
-            + gpu_inference_latency
+            + npu_inference_latency
             + cpu_delay
             + network_delay
         )
@@ -191,7 +192,7 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
             + event_intent_share * intent_latency
         )
 
-    bottleneck_util = max(cpu_util, gpu_util, network_util)
+    bottleneck_util = max(cpu_util, npu_util, network_util)
     if unstable:
         mean_latency = math.inf
         p95_latency = math.inf
@@ -201,8 +202,8 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
         p95_latency = mean_latency * min(tail_amplifier, 10.0)
         p99_latency = mean_latency * min(tail_amplifier * 1.35, 15.0)
 
-    required_gpus_70pct = (
-        math.ceil(intent_rps / (config.gpu_capacity_per_gpu_rps * config.gpu_degraded_util))
+    required_npus_70pct = (
+        math.ceil(intent_rps / (config.npu_capacity_per_npu_rps * config.npu_degraded_util))
         if intent_rps > 0
         else 0
     )
@@ -210,11 +211,11 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
     result: Dict[str, float | str] = {
         "user_count": config.user_count,
         "pdu_sessions_per_user": config.pdu_sessions_per_user,
-        "gpu_count": config.gpu_count,
-        "gpu_capacity_per_gpu_rps": config.gpu_capacity_per_gpu_rps,
-        "gpu_total_capacity_rps": gpu_total_capacity_rps,
-        "gpu_vram_per_gpu_gb": config.gpu_vram_per_gpu_gb,
-        "gpu_total_vram_gb": gpu_total_vram_gb,
+        "npu_count": config.npu_count,
+        "npu_capacity_per_npu_rps": config.npu_capacity_per_npu_rps,
+        "npu_total_capacity_rps": npu_total_capacity_rps,
+        "npu_hbm_per_npu_gb": config.npu_hbm_per_npu_gb,
+        "npu_total_hbm_gb": npu_total_hbm_gb,
         "total_rps": rps_total,
         "eligible_intent_ratio": eligible_intent_ratio,
         "intent_eligible_rps": intent_eligible_rps,
@@ -227,11 +228,11 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
         "ram_gb": ram_gb,
         "ram_utilization": ram_gb / config.ram_gb,
         "memory_traffic_gbps": memory_traffic_gbps,
-        "gpu_utilization": gpu_util,
-        "gpu_status": status(gpu_util, config.gpu_degraded_util, config.gpu_high_risk_util),
-        "gpu_vram_gb": gpu_vram_gb,
-        "gpu_vram_utilization": gpu_vram_gb / gpu_total_vram_gb,
-        "required_gpus_for_70pct_util": required_gpus_70pct,
+        "npu_utilization": npu_util,
+        "npu_status": status(npu_util, config.npu_degraded_util, config.npu_high_risk_util),
+        "npu_hbm_gb": npu_hbm_gb,
+        "npu_hbm_utilization": npu_hbm_gb / npu_total_hbm_gb if npu_total_hbm_gb else math.inf,
+        "required_npus_for_70pct_util": required_npus_70pct,
         "network_bandwidth_gbps": bandwidth_gbps,
         "network_utilization": network_util,
         "network_status": status(network_util, 0.70, 0.85),
@@ -274,7 +275,7 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
 
     plt.figure(figsize=(7, 4.2))
     plt.plot(x, [float(r["cpu_utilization"]) * 100.0 for r in rows], marker="o", label="CPU")
-    plt.plot(x, [float(r["gpu_utilization"]) * 100.0 for r in rows], marker="o", label="GPU")
+    plt.plot(x, [float(r["npu_utilization"]) * 100.0 for r in rows], marker="o", label="NPU")
     plt.plot(x, [float(r["network_utilization"]) * 100.0 for r in rows], marker="o", label="Network")
     plt.axhline(70, color="tab:orange", linestyle="--", linewidth=1, label="70% threshold")
     plt.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
@@ -312,10 +313,17 @@ def main() -> None:
         for ratio in INTENT_SETTINGS
     ]
     write_csv(sensitivity_rows, out_dir / "agentic_resource_sensitivity.csv")
+    capacity_rows = [
+        evaluate(replace(config, npu_capacity_per_npu_rps=capacity), ratio)
+        for capacity in SENSITIVITY_NPU_CAPACITIES
+        for ratio in INTENT_SETTINGS
+    ]
+    write_csv(capacity_rows, out_dir / "agentic_npu_capacity_sensitivity.csv")
     maybe_write_plots(rows, out_dir)
 
     print("Wrote outputs/agentic_resource_results.csv")
     print("Wrote outputs/agentic_resource_sensitivity.csv")
+    print("Wrote outputs/agentic_npu_capacity_sensitivity.csv")
     if (out_dir / "agentic_resource_utilization.png").exists():
         print("Wrote outputs/agentic_resource_utilization.png")
         print("Wrote outputs/agentic_latency.png")

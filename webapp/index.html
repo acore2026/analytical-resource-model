@@ -135,16 +135,16 @@
               <input id="ramGb" type="number" min="1" step="1" value="256">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="gpuCount">GPU count</span> <span class="unit">(GPUs)</span><span class="help" data-tip-key="gpuCountTip" data-tip="Number of GPUs in the inference pool.">?</span></span>
-              <input id="gpuCount" type="number" min="0" step="1" value="20">
+              <span class="label-line"><span data-i18n="npuCount">NPU count</span> <span class="unit">(NPUs)</span><span class="help" data-tip-key="npuCountTip" data-tip="Number of NPUs in the inference pool. The reference profile uses 8 Ascend 910B4 NPUs.">?</span></span>
+              <input id="npuCount" type="number" min="0" step="1" value="8">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="vramPerGpu">VRAM per GPU</span> <span class="unit">(GB/GPU)</span><span class="help" data-tip-key="vramPerGpuTip" data-tip="Accelerator memory available on each GPU for the inference model and active intent request state.">?</span></span>
-              <input id="gpuVramPerGpuGb" type="number" min="1" step="1" value="24">
+              <span class="label-line"><span data-i18n="hbmPerNpu">HBM per NPU</span> <span class="unit">(GB/NPU)</span><span class="help" data-tip-key="hbmPerNpuTip" data-tip="High-bandwidth memory available on each NPU. The reference profile uses 32 GB HBM per NPU.">?</span></span>
+              <input id="npuHbmPerNpuGb" type="number" min="1" step="1" value="32">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="gpuIntentCapacity">GPU capacity per GPU</span> <span class="unit">(intent/s/GPU)</span><span class="help" data-tip-key="gpuIntentCapacityTip" data-tip="Maximum intent-bearing requests one GPU can process per second before queueing becomes unstable.">?</span></span>
-              <input id="gpuCapacityPerGpu" type="number" min="1" step="50" value="2000">
+              <span class="label-line"><span data-i18n="npuIntentCapacity">NPU capacity per NPU</span> <span class="unit">(intent/s/NPU)</span><span class="help" data-tip-key="npuIntentCapacityTip" data-tip="Assumed intent inference throughput per NPU. With 8 NPUs and 24,000 peak intent req/s, the 70% target requires about 4,286 intent/s/NPU.">?</span></span>
+              <input id="npuCapacityPerNpu" type="number" min="1" step="50" value="4300">
             </label>
           </div>
 
@@ -159,12 +159,12 @@
               <input id="nonIntentCpu" type="number" min="0" step="0.1" value="0.3">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="intentCpuCost">Intent CPU cost</span> <span class="unit">(CPU-ms/request)</span><span class="help" data-tip-key="intentCpuCostTip" data-tip="CPU-side agent work for intent parsing, constraints, planning, and tool-wrapper handling outside GPU inference.">?</span></span>
+              <span class="label-line"><span data-i18n="intentCpuCost">Intent CPU cost</span> <span class="unit">(CPU-ms/request)</span><span class="help" data-tip-key="intentCpuCostTip" data-tip="CPU-side agent work for intent parsing, constraints, planning, and tool-wrapper handling outside NPU inference.">?</span></span>
               <input id="intentCpu" type="number" min="0" step="0.1" value="2.0">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="intentInferenceLatency">Intent inference latency</span> <span class="unit">(ms/request)</span><span class="help" data-tip-key="intentInferenceLatencyTip" data-tip="Per-request accelerator inference service time before queueing delay.">?</span></span>
-              <input id="intentGpuMs" type="number" min="0" step="0.5" value="8">
+              <span class="label-line"><span data-i18n="intentInferenceLatency">Intent inference latency</span> <span class="unit">(ms/request)</span><span class="help" data-tip-key="intentInferenceLatencyTip" data-tip="Per-request NPU inference service time before queueing delay.">?</span></span>
+              <input id="intentNpuMs" type="number" min="0" step="0.5" value="8">
             </label>
             <label class="field compact">
               <span class="label-line"><span data-i18n="intentExtraBandwidth">Intent extra bandwidth</span> <span class="unit">(KB/request)</span><span class="help" data-tip-key="intentExtraBandwidthTip" data-tip="Additional control-plane message bytes caused by agent-tool wrappers and inter-agent task messages.">?</span></span>
@@ -188,9 +188,9 @@
               <div class="bar"><i id="ramBar"></i></div>
             </article>
             <article class="metric">
-              <span data-i18n="gpuLoadMetric">GPU load (%)</span>
-              <strong id="gpuDemand">--</strong>
-              <div class="bar"><i id="gpuBar"></i></div>
+              <span data-i18n="npuLoadMetric">NPU load (%)</span>
+              <strong id="npuDemand">--</strong>
+              <div class="bar"><i id="npuBar"></i></div>
             </article>
             <article class="metric">
               <span data-i18n="bandwidthMetric">Bandwidth (Gbps)</span>
@@ -216,7 +216,7 @@
               <span class="panel-code">05</span>
               <h2 data-i18n="intentSweep">Intent Sweep</h2>
             </div>
-            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share within eligible events. Y-axis: CPU, GPU, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.</p>
+            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share within eligible events. Y-axis: CPU, NPU, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.</p>
             <div class="chart-frame">
               <div class="axis-label y-axis" data-i18n="yAxisLabel">Resource utilization (%)</div>
               <canvas id="sweepChart" width="920" height="360" aria-label="Intent sweep chart"></canvas>
@@ -237,7 +237,7 @@
                     <th data-i18n="tableTotalIntent">Total intent (%)</th>
                     <th data-i18n="tableIntentRate">Intent rate (req/s)</th>
                     <th data-i18n="tableCpuUtil">CPU util (%)</th>
-                    <th data-i18n="tableGpuUtil">GPU util (%)</th>
+                    <th data-i18n="tableNpuUtil">NPU util (%)</th>
                     <th data-i18n="tableBw">BW (Gbps)</th>
                     <th data-i18n="tableMean">Mean (ms)</th>
                     <th data-i18n="tableStatus">Status</th>

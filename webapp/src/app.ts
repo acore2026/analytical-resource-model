@@ -19,12 +19,12 @@ interface Baseline {
   cpuCores: number;
   nicGbps: number;
   ramGb: number;
-  gpuCount: number;
-  gpuVramPerGpuGb: number;
-  gpuCapacityPerGpu: number;
+  npuCount: number;
+  npuHbmPerNpuGb: number;
+  npuCapacityPerNpu: number;
   nonIntentCpu: number;
   intentCpu: number;
-  intentGpuMs: number;
+  intentNpuMs: number;
   intentBandwidthKb: number;
 }
 
@@ -56,10 +56,10 @@ interface Result {
   ramGb: number;
   ramUtil: number;
   memoryTrafficGbps: number;
-  gpuUtil: number;
-  gpuVramGb: number;
-  gpuVramUtil: number;
-  requiredGpus70: number;
+  npuUtil: number;
+  npuHbmGb: number;
+  npuHbmUtil: number;
+  requiredNpus70: number;
   networkGbps: number;
   networkUtil: number;
   meanLatency: number;
@@ -67,7 +67,7 @@ interface Result {
   p99Latency: number;
   systemStatus: SystemStatus;
   cpuStatus: SystemStatus;
-  gpuStatus: SystemStatus;
+  npuStatus: SystemStatus;
   netStatus: SystemStatus;
   events: EventLoad[];
 }
@@ -79,12 +79,12 @@ const BASELINE: Baseline = {
   cpuCores: 256,
   nicGbps: 100,
   ramGb: 256,
-  gpuCount: 20,
-  gpuVramPerGpuGb: 24,
-  gpuCapacityPerGpu: 2000,
+  npuCount: 8,
+  npuHbmPerNpuGb: 32,
+  npuCapacityPerNpu: 4300,
   nonIntentCpu: 0.3,
   intentCpu: 2.0,
-  intentGpuMs: 8,
+  intentNpuMs: 8,
   intentBandwidthKb: 12
 };
 
@@ -109,12 +109,12 @@ const MODEL_INPUT_IDS = [
   "cpuCores",
   "nicGbps",
   "ramGb",
-  "gpuCount",
-  "gpuVramPerGpuGb",
-  "gpuCapacityPerGpu",
+  "npuCount",
+  "npuHbmPerNpuGb",
+  "npuCapacityPerNpu",
   "nonIntentCpu",
   "intentCpu",
-  "intentGpuMs",
+  "intentNpuMs",
   "intentBandwidthKb"
 ] as const;
 const INPUT_IDS = [...MODEL_INPUT_IDS, ...EVENTS.map((event) => event.inputId)] as const;
@@ -150,9 +150,9 @@ const I18N: Record<Lang, Record<string, string>> = {
     cpuCores: "CPU cores",
     nicCapacity: "NIC capacity",
     ramCapacity: "RAM capacity",
-    gpuCount: "GPU count",
-    vramPerGpu: "VRAM per GPU",
-    gpuIntentCapacity: "GPU capacity per GPU",
+    npuCount: "NPU count",
+    hbmPerNpu: "HBM per NPU",
+    npuIntentCapacity: "NPU capacity per NPU",
     nonIntentCpuCost: "Non-intent CPU cost",
     intentCpuCost: "Intent CPU cost",
     intentInferenceLatency: "Intent inference latency",
@@ -160,22 +160,22 @@ const I18N: Record<Lang, Record<string, string>> = {
     resetBaseline: "Reset baseline",
     cpuDemandMetric: "CPU demand (cores)",
     memoryMetric: "Memory (GB)",
-    gpuLoadMetric: "GPU load (%)",
+    npuLoadMetric: "NPU load (%)",
     bandwidthMetric: "Bandwidth (Gbps)",
     meanLatencyMetric: "Mean latency (ms)",
     p95LatencyMetric: "p95 latency (ms)",
     p99LatencyMetric: "p99 latency (ms)",
     intentSweep: "Intent Sweep",
-    intentSweepDescription: "X-axis: intent-bearing share within eligible events. Y-axis: CPU, GPU, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.",
+    intentSweepDescription: "X-axis: intent-bearing share within eligible events. Y-axis: CPU, NPU, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.",
     xAxisLabel: "Eligible intent ratio (%)",
     yAxisLabel: "Resource utilization (%)",
-    intentSweepAria: "Line chart showing CPU, GPU, and network utilization by eligible intent ratio.",
+    intentSweepAria: "Line chart showing CPU, NPU, and network utilization by eligible intent ratio.",
     calculatedSweep: "Calculated Sweep",
     tableEligibleIntent: "Eligible intent (%)",
     tableTotalIntent: "Total intent (%)",
     tableIntentRate: "Intent rate (req/s)",
     tableCpuUtil: "CPU util (%)",
-    tableGpuUtil: "GPU util (%)",
+    tableNpuUtil: "NPU util (%)",
     tableBw: "BW (Gbps)",
     tableMean: "Mean (ms)",
     tableStatus: "Status",
@@ -195,12 +195,12 @@ const I18N: Record<Lang, Record<string, string>> = {
     cpuCoresTip: "Total CPU core capacity available to deterministic procedure handling and CPU-side agent logic.",
     nicCapacityTip: "Network interface capacity available for control-plane message traffic.",
     ramCapacityTip: "Host memory capacity for agent/NF processes, active request contexts, and runtime state.",
-    gpuCountTip: "Number of GPUs in the inference pool.",
-    vramPerGpuTip: "Accelerator memory available on each GPU for the inference model and active intent request state.",
-    gpuIntentCapacityTip: "Maximum intent-bearing requests one GPU can process per second before queueing becomes unstable.",
+    npuCountTip: "Number of NPUs in the inference pool. The reference profile uses 8 Ascend 910B4 NPUs.",
+    hbmPerNpuTip: "High-bandwidth memory available on each NPU. The reference profile uses 32 GB HBM per NPU.",
+    npuIntentCapacityTip: "Assumed intent inference throughput per NPU. With 8 NPUs and 24,000 peak intent req/s, the 70% target requires about 4,286 intent/s/NPU.",
     nonIntentCpuCostTip: "CPU-ms means one CPU core occupied for one millisecond. 0.3 CPU-ms is 0.3 ms on one core, or equivalent parallel CPU work.",
-    intentCpuCostTip: "CPU-side agent work for intent parsing, constraints, planning, and tool-wrapper handling outside GPU inference.",
-    intentInferenceLatencyTip: "Per-request accelerator inference service time before queueing delay.",
+    intentCpuCostTip: "CPU-side agent work for intent parsing, constraints, planning, and tool-wrapper handling outside NPU inference.",
+    intentInferenceLatencyTip: "Per-request NPU inference service time before queueing delay.",
     intentExtraBandwidthTip: "Additional control-plane message bytes caused by agent-tool wrappers and inter-agent task messages.",
     allRequests: "of all requests",
     totalTraffic: "Total traffic",
@@ -209,17 +209,17 @@ const I18N: Record<Lang, Record<string, string>> = {
     sessionsPerUser: "PDU sessions/user",
     bottleneck: "Bottleneck",
     intentTraffic: "Intent traffic is",
-    gpu70: "keeping GPU utilization at or below 70% requires",
-    accelerator: "GPU",
-    accelerators: "GPUs",
+    npu70: "keeping NPU utilization at or below 70% requires",
+    accelerator: "NPU",
+    accelerators: "NPUs",
     stable: "stable",
     degraded: "degraded",
     high_risk: "high risk",
     unstable: "unstable",
     cpu: "CPU",
-    gpu: "GPU",
+    npu: "NPU",
     network: "Network",
-    gpuInference: "GPU inference",
+    npuInference: "NPU inference",
     ram: "RAM",
     coresUnit: "cores"
   },
@@ -253,9 +253,9 @@ const I18N: Record<Lang, Record<string, string>> = {
     cpuCores: "CPU 核数",
     nicCapacity: "网卡容量",
     ramCapacity: "内存容量",
-    gpuCount: "GPU 数量",
-    vramPerGpu: "每 GPU 显存",
-    gpuIntentCapacity: "单 GPU 推理能力",
+    npuCount: "NPU 数量",
+    hbmPerNpu: "每 NPU HBM",
+    npuIntentCapacity: "单 NPU 推理能力",
     nonIntentCpuCost: "非意图 CPU 成本",
     intentCpuCost: "意图 CPU 成本",
     intentInferenceLatency: "意图推理时延",
@@ -263,22 +263,22 @@ const I18N: Record<Lang, Record<string, string>> = {
     resetBaseline: "重置基线",
     cpuDemandMetric: "CPU 需求（核）",
     memoryMetric: "内存（GB）",
-    gpuLoadMetric: "GPU 负载（%）",
+    npuLoadMetric: "NPU 负载（%）",
     bandwidthMetric: "带宽（Gbps）",
     meanLatencyMetric: "平均时延（ms）",
     p95LatencyMetric: "p95 时延（ms）",
     p99LatencyMetric: "p99 时延（ms）",
     intentSweep: "意图比例扫描",
-    intentSweepDescription: "横轴表示可携带意图事件中真正携带意图的比例。纵轴表示 CPU、GPU 和网络利用率。总请求速率由用户数和事件频率推导，因此在该扫描中保持不变。",
+    intentSweepDescription: "横轴表示可携带意图事件中真正携带意图的比例。纵轴表示 CPU、NPU 和网络利用率。总请求速率由用户数和事件频率推导，因此在该扫描中保持不变。",
     xAxisLabel: "可携带意图比例（%）",
     yAxisLabel: "资源利用率（%）",
-    intentSweepAria: "折线图，展示不同可携带意图比例下的 CPU、GPU 和网络利用率。",
+    intentSweepAria: "折线图，展示不同可携带意图比例下的 CPU、NPU 和网络利用率。",
     calculatedSweep: "计算结果扫描",
     tableEligibleIntent: "可携带意图比例（%）",
     tableTotalIntent: "总意图比例（%）",
     tableIntentRate: "意图速率（req/s）",
     tableCpuUtil: "CPU 利用率（%）",
-    tableGpuUtil: "GPU 利用率（%）",
+    tableNpuUtil: "NPU 利用率（%）",
     tableBw: "带宽（Gbps）",
     tableMean: "平均值（ms）",
     tableStatus: "状态",
@@ -298,12 +298,12 @@ const I18N: Record<Lang, Record<string, string>> = {
     cpuCoresTip: "可用于确定性流程处理和 Agent CPU 侧逻辑的总 CPU 核数。",
     nicCapacityTip: "可用于控制面消息传输的网卡容量。",
     ramCapacityTip: "主机内存容量，用于 Agent/NF 进程、活跃请求上下文和运行状态。",
-    gpuCountTip: "推理池中的 GPU 数量。",
-    vramPerGpuTip: "每个 GPU 上可用于推理模型和活跃意图请求状态的加速器显存。",
-    gpuIntentCapacityTip: "推理队列失稳前，单个 GPU 每秒可处理的意图请求数。",
+    npuCountTip: "推理池中的 NPU 数量。参考配置使用 8 张 Ascend 910B4 NPU。",
+    hbmPerNpuTip: "每个 NPU 可用的高带宽内存。参考配置为每 NPU 32 GB HBM。",
+    npuIntentCapacityTip: "单个 NPU 的假设意图推理吞吐量。在 8 张 NPU 和 24,000 peak intent req/s 下，70% 利用率目标约需要 4,286 intent/s/NPU。",
     nonIntentCpuCostTip: "CPU-ms 表示一个 CPU 核占用一毫秒。0.3 CPU-ms 等价于单核 0.3 ms 的计算量。",
-    intentCpuCostTip: "意图解析、约束检查、规划和工具封装等 GPU 推理之外的 CPU 侧 Agent 工作量。",
-    intentInferenceLatencyTip: "不含排队延迟时，单个意图请求的加速器推理服务时间。",
+    intentCpuCostTip: "意图解析、约束检查、规划和工具封装等 NPU 推理之外的 CPU 侧 Agent 工作量。",
+    intentInferenceLatencyTip: "不含排队延迟时，单个意图请求的 NPU 推理服务时间。",
     intentExtraBandwidthTip: "由 Agent-Tool 封装和 Agent 间任务消息带来的额外控制面消息字节数。",
     allRequests: "占全部请求",
     totalTraffic: "总流量",
@@ -312,17 +312,17 @@ const I18N: Record<Lang, Record<string, string>> = {
     sessionsPerUser: "PDU 会话/用户",
     bottleneck: "瓶颈",
     intentTraffic: "意图流量为",
-    gpu70: "若保持 GPU 利用率不超过 70%，需要",
-    accelerator: "个 GPU",
-    accelerators: "个 GPU",
+    npu70: "若保持 NPU 利用率不超过 70%，需要",
+    accelerator: "个 NPU",
+    accelerators: "个 NPU",
     stable: "稳定",
     degraded: "退化",
     high_risk: "高风险",
     unstable: "不稳定",
     cpu: "CPU",
-    gpu: "GPU",
+    npu: "NPU",
     network: "网络",
-    gpuInference: "GPU 推理",
+    npuInference: "NPU 推理",
     ram: "内存",
     coresUnit: "核"
   }
@@ -430,17 +430,17 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
   const networkUtil = networkGbps / Math.max(1, num("nicGbps"));
   const networkDelay = queueDelayMs(networkUtil, 0.1);
 
-  const gpuCount = Math.max(0, num("gpuCount"));
-  const gpuCapacityPerGpu = Math.max(1, num("gpuCapacityPerGpu"));
-  const gpuTotalCapacity = gpuCount * gpuCapacityPerGpu;
-  const gpuUtil = gpuTotalCapacity > 0 ? intentRps / gpuTotalCapacity : Infinity;
-  const gpuQueueDelay = queueDelayMs(gpuUtil, 1000 / Math.max(1, gpuTotalCapacity));
-  const intentGpuLatency = Math.max(0, num("intentGpuMs")) + gpuQueueDelay;
+  const npuCount = Math.max(0, num("npuCount"));
+  const npuCapacityPerNpu = Math.max(1, num("npuCapacityPerNpu"));
+  const npuTotalCapacity = npuCount * npuCapacityPerNpu;
+  const npuUtil = npuTotalCapacity > 0 ? intentRps / npuTotalCapacity : Infinity;
+  const npuQueueDelay = queueDelayMs(npuUtil, 1000 / Math.max(1, npuTotalCapacity));
+  const intentNpuLatency = Math.max(0, num("intentNpuMs")) + npuQueueDelay;
 
-  const activeIntentRequests = intentRps * Math.max(0, num("intentGpuMs")) / 1000;
-  const activeGpuCount = intentRps > 0 ? Math.min(gpuCount, Math.ceil(intentRps / gpuCapacityPerGpu)) : 0;
-  const gpuVramGb = intentRps > 0 ? activeGpuCount * 16 + activeIntentRequests * 4 / 1024 : 0;
-  const gpuVramUtil = gpuVramGb / Math.max(1, gpuCount * Math.max(1, num("gpuVramPerGpuGb")));
+  const activeIntentRequests = intentRps * Math.max(0, num("intentNpuMs")) / 1000;
+  const activeNpuCount = intentRps > 0 ? Math.min(npuCount, Math.ceil(intentRps / npuCapacityPerNpu)) : 0;
+  const npuHbmGb = intentRps > 0 ? activeNpuCount * 16 + activeIntentRequests * 4 / 1024 : 0;
+  const npuHbmUtil = npuHbmGb / Math.max(1, npuCount * Math.max(1, num("npuHbmPerNpuGb")));
 
   const activeRequests = totalRps * baseLatencyAvg / 1000;
   const ramGb = 32 + activeRequests * 128 / 1024 / 1024;
@@ -454,12 +454,12 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
     const eventShare = totalRps > 0 ? event.rps / totalRps : 0;
     const eventIntentShare = event.intentEligible ? intentRatio : 0;
     const nonIntentLatency = event.baseLatencyMs + 1 + cpuDelay + networkDelay;
-    const intentLatency = event.baseLatencyMs + 4 + Math.max(0, num("intentCpu")) + intentGpuLatency + cpuDelay + networkDelay;
+    const intentLatency = event.baseLatencyMs + 4 + Math.max(0, num("intentCpu")) + intentNpuLatency + cpuDelay + networkDelay;
     meanLatency += eventShare * ((1 - eventIntentShare) * nonIntentLatency + eventIntentShare * intentLatency);
   }
 
-  const bottleneckUtil = Math.max(cpuUtil, gpuUtil, networkUtil);
-  const unstable = cpuUtil >= 1 || gpuUtil >= 1 || networkUtil >= 1 || !Number.isFinite(meanLatency);
+  const bottleneckUtil = Math.max(cpuUtil, npuUtil, networkUtil);
+  const unstable = cpuUtil >= 1 || npuUtil >= 1 || networkUtil >= 1 || !Number.isFinite(meanLatency);
   let p95Latency = Infinity;
   let p99Latency = Infinity;
   if (!unstable) {
@@ -471,7 +471,7 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
   }
 
   const systemStatus: SystemStatus = unstable ? "unstable" : classifyStatus(bottleneckUtil);
-  const requiredGpus70 = intentRps > 0 ? Math.ceil(intentRps / (gpuCapacityPerGpu * 0.7)) : 0;
+  const requiredNpus70 = intentRps > 0 ? Math.ceil(intentRps / (npuCapacityPerNpu * 0.7)) : 0;
 
   return {
     totalRps,
@@ -485,10 +485,10 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
     ramGb,
     ramUtil,
     memoryTrafficGbps,
-    gpuUtil,
-    gpuVramGb,
-    gpuVramUtil,
-    requiredGpus70,
+    npuUtil,
+    npuHbmGb,
+    npuHbmUtil,
+    requiredNpus70,
     networkGbps,
     networkUtil,
     meanLatency,
@@ -496,7 +496,7 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
     p99Latency,
     systemStatus,
     cpuStatus: classifyStatus(cpuUtil),
-    gpuStatus: classifyStatus(gpuUtil),
+    npuStatus: classifyStatus(npuUtil),
     netStatus: classifyStatus(networkUtil),
     events
   };
@@ -517,7 +517,7 @@ function setBar(id: string, util: number, statusName: SystemStatus): void {
 function bottleneckLabel(result: Result): string {
   const pairs: Array<[string, number]> = [
     [t("cpu"), result.cpuUtil],
-    [t("gpuInference"), result.gpuUtil],
+    [t("npuInference"), result.npuUtil],
     [t("network"), result.networkUtil],
     [t("ram"), result.ramUtil]
   ];
@@ -545,12 +545,12 @@ function updateSummary(result: Result): void {
 
   mustGet("cpuDemand").textContent = `${fmt(result.cpuCoreDemand, 1)} ${t("coresUnit")}`;
   mustGet("ramDemand").textContent = `${fmt(result.ramGb, 1)} GB`;
-  mustGet("gpuDemand").textContent = pct(result.gpuUtil);
+  mustGet("npuDemand").textContent = pct(result.npuUtil);
   mustGet("netDemand").textContent = `${fmt(result.networkGbps, 3)} Gbps`;
 
   setBar("cpuBar", result.cpuUtil, result.cpuStatus);
   setBar("ramBar", result.ramUtil, classifyStatus(result.ramUtil));
-  setBar("gpuBar", result.gpuUtil, result.gpuStatus);
+  setBar("npuBar", result.npuUtil, result.npuStatus);
   setBar("netBar", result.networkUtil, result.netStatus);
 
   mustGet("meanLatency").textContent = `${fmt(result.meanLatency, 1)} ms`;
@@ -563,11 +563,11 @@ function updateSummary(result: Result): void {
   stateDot.style.boxShadow = `0 0 20px ${colorForStatus(result.systemStatus)}`;
   stateText.textContent = statusText(result.systemStatus);
 
-  const gpus = result.requiredGpus70;
+  const npus = result.requiredNpus70;
   const acceleratorLabel = currentLang === "zh"
     ? t("accelerator")
-    : (gpus === 1 ? t("accelerator") : t("accelerators"));
-  mustGet("bottleneckNote").textContent = `${t("bottleneck")}: ${bottleneckLabel(result)}. ${t("intentTraffic")} ${fmt(result.intentRps, 0)} req/s; ${t("gpu70")} ${gpus} ${acceleratorLabel}.`;
+    : (npus === 1 ? t("accelerator") : t("accelerators"));
+  mustGet("bottleneckNote").textContent = `${t("bottleneck")}: ${bottleneckLabel(result)}. ${t("intentTraffic")} ${fmt(result.intentRps, 0)} req/s; ${t("npu70")} ${npus} ${acceleratorLabel}.`;
   updateEventTable(result);
 }
 
@@ -579,7 +579,7 @@ function updateTable(rows: Result[]): void {
       <td>${pct(row.actualIntentShare)}</td>
       <td>${fmt(row.intentRps, 0)}</td>
       <td>${pct(row.cpuUtil)}</td>
-      <td>${pct(row.gpuUtil)}</td>
+      <td>${pct(row.npuUtil)}</td>
       <td>${fmt(row.networkGbps, 3)} Gbps</td>
       <td>${fmt(row.meanLatency, 1)} ms</td>
       <td class="status-${row.systemStatus}">${statusText(row.systemStatus)}</td>
@@ -603,7 +603,7 @@ function drawChart(rows: Result[]): void {
   const plotH = height - pad.top - pad.bottom;
   const x = (index: number) => pad.left + (index / (rows.length - 1)) * plotW;
   const y = (value: number, max: number) => pad.top + plotH - (clamp(value, 0, max) / max) * plotH;
-  const finiteUtils = rows.flatMap((row) => [row.cpuUtil, row.gpuUtil, row.networkUtil]).filter(Number.isFinite);
+  const finiteUtils = rows.flatMap((row) => [row.cpuUtil, row.npuUtil, row.networkUtil]).filter(Number.isFinite);
   const maxUtil = Math.max(1.1, ...finiteUtils);
 
   ctx.strokeStyle = "#d7ddd3";
@@ -619,9 +619,9 @@ function drawChart(rows: Result[]): void {
     ctx.fillText(`${Math.round((1 - i / 4) * maxUtil * 100)}%`, 10, gy + 6);
   }
 
-  const series: Array<{ key: "cpuUtil" | "gpuUtil" | "networkUtil"; label: string; color: string }> = [
+  const series: Array<{ key: "cpuUtil" | "npuUtil" | "networkUtil"; label: string; color: string }> = [
     { key: "cpuUtil", label: t("cpu"), color: "#3c8b4a" },
-    { key: "gpuUtil", label: t("gpu"), color: "#d66a00" },
+    { key: "npuUtil", label: t("npu"), color: "#d66a00" },
     { key: "networkUtil", label: t("network"), color: "#1769d1" }
   ];
 
