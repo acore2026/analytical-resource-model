@@ -43,7 +43,7 @@
           </div>
 
           <label class="field">
-            <span class="label-line"><span data-i18n="intentRatio">Intent ratio among eligible events</span> <span class="unit">(%)</span><span class="help" data-tip-key="intentRatioTip" data-tip="Share of initial PDU establishment, PDU modification, and service request events that carry user intent.">?</span></span>
+            <span class="label-line"><span data-i18n="intentRatio">Intent ratio across all requests</span> <span class="unit">(%)</span><span class="help" data-tip-key="intentRatioTip" data-tip="Share of all control-plane requests that carry user intent.">?</span></span>
             <input id="intentRatio" type="range" min="0" max="100" step="1" value="10">
             <div class="range-readout"><strong id="intentRatioLabel">10%</strong><span id="actualIntentLabel">2.3% of all requests</span></div>
           </label>
@@ -68,7 +68,7 @@
               <input id="eventMobilityRegistration" type="number" min="0" step="0.1" value="7">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="initialPdu">Initial PDU establishment</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="initialPduTip" data-tip="How often one user establishes an initial PDU session in one hour. This event is intent-eligible.">?</span></span>
+              <span class="label-line"><span data-i18n="initialPdu">Initial PDU establishment</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="initialPduTip" data-tip="How often one user establishes an initial PDU session in one hour.">?</span></span>
               <input id="eventInitialPdu" type="number" min="0" step="0.1" value="1">
             </label>
             <label class="field compact">
@@ -76,11 +76,11 @@
               <input id="eventPduRelease" type="number" min="0" step="0.1" value="1">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="pduModification">PDU session modification</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="pduModificationTip" data-tip="How often one user modifies a PDU session in one hour. This event is intent-eligible.">?</span></span>
+              <span class="label-line"><span data-i18n="pduModification">PDU session modification</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="pduModificationTip" data-tip="How often one user modifies a PDU session in one hour.">?</span></span>
               <input id="eventPduModification" type="number" min="0" step="0.1" value="2">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="serviceRequest">Service request</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="serviceRequestTip" data-tip="How often one user triggers service request in one hour. This event is intent-eligible.">?</span></span>
+              <span class="label-line"><span data-i18n="serviceRequest">Service request</span> <span class="unit">(events/user/hour)</span><span class="help" data-tip-key="serviceRequestTip" data-tip="How often one user triggers service request in one hour.">?</span></span>
               <input id="eventServiceRequest" type="number" min="0" step="0.1" value="21">
             </label>
             <label class="field compact">
@@ -109,7 +109,6 @@
                     <th data-i18n="eventName">Event</th>
                     <th data-i18n="perUserHour">Per user/hour</th>
                     <th data-i18n="derivedRps">Request/s</th>
-                    <th data-i18n="eligible">Intent</th>
                   </tr>
                 </thead>
                 <tbody id="eventTable"></tbody>
@@ -253,11 +252,11 @@
               <span class="panel-code">05</span>
               <h2 data-i18n="intentSweep">Intent Sweep</h2>
             </div>
-            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share within eligible events. Y-axis: CPU, sized Qwen3, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.</p>
+            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share across all request types. Y-axis: CPU, sized Qwen3, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.</p>
             <div class="chart-frame">
               <div class="axis-label y-axis" data-i18n="yAxisLabel">Resource utilization (%)</div>
               <canvas id="sweepChart" width="920" height="360" aria-label="Intent sweep chart"></canvas>
-              <div class="axis-label x-axis" data-i18n="xAxisLabel">Eligible intent ratio (%)</div>
+              <div class="axis-label x-axis" data-i18n="xAxisLabel">Intent ratio (%)</div>
             </div>
           </div>
 
@@ -270,7 +269,7 @@
               <table>
                 <thead>
                   <tr>
-                    <th data-i18n="tableEligibleIntent">Eligible intent (%)</th>
+                    <th data-i18n="tableIntentRatio">Intent ratio (%)</th>
                     <th data-i18n="tableTotalIntent">Total intent (%)</th>
                     <th data-i18n="tableIntentRate">Intent rate (req/s)</th>
                     <th data-i18n="tableCpuUtil">CPU util (%)</th>

@@ -22,20 +22,20 @@ lambda_total [requests/s] = sum_i(lambda_i)
 
 基线采用 `3,600,000 users` 和 `2 PDU sessions/user`。PDU 会话数作为场景变量保留，但不会自动乘到事件速率上；若需要体现会话数量影响，应调整每用户每小时事件频率。
 
-| 事件 | 默认每用户每小时次数 | 推导请求速率 | 基线时延 | 基线 CPU | 基线带宽 | 可携带意图 |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| 初始注册 | 0.1 events/user/hour | 100 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request | 否 |
-| 周期注册 | 0.1 events/user/hour | 100 requests/s | 25 ms | 1.5 CPU-ms/request | 10 KB/request | 否 |
-| 移动性注册 | 7.0 events/user/hour | 7,000 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request | 否 |
-| 初始 PDU 会话建立 | 1.0 events/user/hour | 1,000 requests/s | 40 ms | 2.5 CPU-ms/request | 16 KB/request | 是 |
-| PDU 会话释放 | 1.0 events/user/hour | 1,000 requests/s | 25 ms | 1.5 CPU-ms/request | 10 KB/request | 否 |
-| PDU 会话修改 | 2.0 events/user/hour | 2,000 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request | 是 |
-| 业务请求 | 21.0 events/user/hour | 21,000 requests/s | 20 ms | 1.2 CPU-ms/request | 8 KB/request | 是 |
-| AN 释放 | 35.0 events/user/hour | 35,000 requests/s | 15 ms | 0.8 CPU-ms/request | 6 KB/request | 否 |
-| 切换 | 23.1 events/user/hour | 23,100 requests/s | 25 ms | 1.8 CPU-ms/request | 12 KB/request | 否 |
-| 寻呼 | 14.0 events/user/hour | 14,000 requests/s | 12 ms | 0.6 CPU-ms/request | 4 KB/request | 否 |
+| 事件 | 默认每用户每小时次数 | 推导请求速率 | 基线时延 | 基线 CPU | 基线带宽 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 初始注册 | 0.1 events/user/hour | 100 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request |
+| 周期注册 | 0.1 events/user/hour | 100 requests/s | 25 ms | 1.5 CPU-ms/request | 10 KB/request |
+| 移动性注册 | 7.0 events/user/hour | 7,000 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request |
+| 初始 PDU 会话建立 | 1.0 events/user/hour | 1,000 requests/s | 40 ms | 2.5 CPU-ms/request | 16 KB/request |
+| PDU 会话释放 | 1.0 events/user/hour | 1,000 requests/s | 25 ms | 1.5 CPU-ms/request | 10 KB/request |
+| PDU 会话修改 | 2.0 events/user/hour | 2,000 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request |
+| 业务请求 | 21.0 events/user/hour | 21,000 requests/s | 20 ms | 1.2 CPU-ms/request | 8 KB/request |
+| AN 释放 | 35.0 events/user/hour | 35,000 requests/s | 15 ms | 0.8 CPU-ms/request | 6 KB/request |
+| 切换 | 23.1 events/user/hour | 23,100 requests/s | 25 ms | 1.8 CPU-ms/request | 12 KB/request |
+| 寻呼 | 14.0 events/user/hour | 14,000 requests/s | 12 ms | 0.6 CPU-ms/request | 4 KB/request |
 
-基线总速率为 `104,300 requests/s`。意图仅应用于初始 PDU 会话建立、PDU 会话修改和业务请求。因此，当可携带意图比例为 `100%` 时，总意图请求为 `24,000 requests/s`，占全部请求的 `23.0%`。
+基线总速率为 `104,300 requests/s`。任意请求类型都可能携带意图，因此意图比例应用于完整控制面请求流。当意图比例为 `100%` 时，总意图请求为 `104,300 requests/s`。
 
 ## 资源假设
 
@@ -90,15 +90,15 @@ N_Q [NPUs] =
   R_Q * tensor_parallel_size
 ```
 
-在 `100%` 可携带意图比例下，默认生产场景为：
+在 `100%` 意图比例下，默认生产场景为：
 
 ```text
-lambda_I = 24,000 intent requests/s
+lambda_I = 104,300 intent requests/s
 r_Q = 10%
-lambda_Q = 2,400 Qwen3 requests/s
-T_Q = 2,400 * 132 = 316,800 tokens/s
-R_Q = ceil(316,800 / (15,040 * 0.70)) = 31 replicas
-N_Q = 31 * 4 = 124 NPUs
+lambda_Q = 10,430 Qwen3 requests/s
+T_Q = 10,430 * 132 = 1,376,760 tokens/s
+R_Q = ceil(1,376,760 / (15,040 * 0.70)) = 131 replicas
+N_Q = 131 * 4 = 524 NPUs
 ```
 
 这种表述避免了不现实的假设：即每个意图请求都在 8-NPU 实验室服务器上执行完整 Qwen3 生成。
@@ -172,11 +172,11 @@ Complex intent Qwen3 add-on [ms/request] =
 
 ## 模型
 
-令 `rho_I` 表示可携带意图事件中的意图比例。若事件 `i` 可携带意图，则 `e_i` 为 1，否则为 0。
+令 `rho_I` 表示全部控制面请求中的意图比例。
 
 ```text
-lambda_eligible [requests/s] = sum_i(lambda_i * e_i)
-lambda_I [requests/s] = rho_I * lambda_eligible
+lambda_candidate [requests/s] = lambda_total
+lambda_I [requests/s] = rho_I * lambda_candidate
 s_I [unitless] = lambda_I / lambda_total
 ```
 
@@ -227,38 +227,38 @@ D_queue [ms] = S [ms] * u / (1 - u), for u < 1
 
 ## 分析结果
 
-下表固定用户规模和事件频率，仅改变可携带意图事件中的意图比例。
+下表固定用户规模和事件频率，仅改变全部请求中携带意图的比例。
 
-| 可携带意图比例 | 总意图占比 | 意图 rps | Qwen3 rps | Qwen3 tokens/s | CPU 核 | CPU 利用率 | 内存流量 | Qwen3 利用率 | 所需生产 NPU | 网络带宽 | 平均时延 | p95 时延 | 状态 |
+| 意图比例 | 总意图占比 | 意图 rps | Qwen3 rps | Qwen3 tokens/s | CPU 核 | CPU 利用率 | 内存流量 | Qwen3 利用率 | 所需生产 NPU | 网络带宽 | 平均时延 | p95 时延 | 状态 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 0% | 0.0% | 0 | 0 | 0 | 156.8 | 61.3% | 53.402 Gbps | 0.0% | 0 | 6.779 Gbps | 22.9 ms | 95.1 ms | 稳定 |
-| 1% | 0.2% | 240 | 24 | 3,168 | 157.2 | 61.4% | 54.262 Gbps | 21.1% | 4 | 6.802 Gbps | 22.9 ms | 95.8 ms | 稳定 |
-| 5% | 1.2% | 1,200 | 120 | 15,840 | 158.9 | 62.1% | 57.702 Gbps | 52.7% | 8 | 6.894 Gbps | 23.0 ms | 98.4 ms | 稳定 |
-| 10% | 2.3% | 2,400 | 240 | 31,680 | 160.9 | 62.9% | 62.003 Gbps | 52.7% | 16 | 7.010 Gbps | 23.2 ms | 101.8 ms | 稳定 |
-| 20% | 4.6% | 4,800 | 480 | 63,360 | 165.0 | 64.4% | 70.605 Gbps | 60.2% | 28 | 7.240 Gbps | 23.6 ms | 109.2 ms | 稳定 |
-| 50% | 11.5% | 12,000 | 1,200 | 158,400 | 177.2 | 69.2% | 96.410 Gbps | 65.8% | 64 | 7.931 Gbps | 25.0 ms | 137.3 ms | 稳定 |
-| 100% | 23.0% | 24,000 | 2,400 | 316,800 | 197.6 | 77.2% | 139.418 Gbps | 67.9% | 124 | 9.083 Gbps | 28.2 ms | 219.4 ms | 退化 |
+| 1% | 1.0% | 1,043 | 104 | 13,768 | 158.6 | 62.0% | 57.140 Gbps | 45.8% | 8 | 6.879 Gbps | 23.0 ms | 98.0 ms | 稳定 |
+| 5% | 5.0% | 5,215 | 522 | 68,838 | 165.7 | 64.7% | 72.092 Gbps | 65.4% | 28 | 7.280 Gbps | 23.7 ms | 113.2 ms | 稳定 |
+| 10% | 10.0% | 10,430 | 1,043 | 137,676 | 174.6 | 68.2% | 90.783 Gbps | 65.4% | 56 | 7.780 Gbps | 24.6 ms | 130.3 ms | 稳定 |
+| 20% | 20.0% | 20,860 | 2,086 | 275,352 | 192.3 | 75.1% | 128.164 Gbps | 67.8% | 108 | 8.782 Gbps | 27.2 ms | 191.4 ms | 退化 |
+| 50% | 50.0% | 52,150 | 5,215 | 688,380 | 245.5 | 95.9% | 240.307 Gbps | 69.3% | 264 | 11.786 Gbps | 78.3 ms | 782.8 ms | 高风险 |
+| 100% | 100.0% | 104,300 | 10,430 | 1,376,760 | 334.1 | 130.5% | 427.213 Gbps | 69.9% | 524 | 16.792 Gbps | 不稳定 | 不稳定 | 不稳定 |
 
 生成结果位于 `outputs/agentic_resource_results.csv`。用户规模敏感性扫描位于 `outputs/agentic_resource_sensitivity.csv`。Qwen3 规划敏感性扫描位于 `outputs/agentic_qwen3_sizing_sensitivity.csv`。
 
-在优化参考值 `15,040 tokens/s/replica` 下，`100%` 可携带意图比例的 Qwen3 生产规划如下：
+在优化参考值 `15,040 tokens/s/replica` 下，`100%` 意图比例的 Qwen3 生产规划如下：
 
 | Qwen3 调用比例 | Qwen3 rps | Token 需求 | 所需副本 | 所需 NPU | 规划后 Qwen3 利用率 | 8-NPU 实验室利用率 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 5% | 1,200 | 158,400 tokens/s | 16 | 64 | 65.8% | 526.6% |
-| 10% | 2,400 | 316,800 tokens/s | 31 | 124 | 67.9% | 1,053.2% |
-| 20% | 4,800 | 633,600 tokens/s | 61 | 244 | 69.1% | 2,106.4% |
-| 50% | 12,000 | 1,584,000 tokens/s | 151 | 604 | 69.7% | 5,266.0% |
-| 100% | 24,000 | 3,168,000 tokens/s | 301 | 1,204 | 70.0% | 10,531.9% |
+| 5% | 5,215 | 688,380 tokens/s | 66 | 264 | 69.3% | 2,288.5% |
+| 10% | 10,430 | 1,376,760 tokens/s | 131 | 524 | 69.9% | 4,577.0% |
+| 20% | 20,860 | 2,753,520 tokens/s | 262 | 1,048 | 69.9% | 9,154.0% |
+| 50% | 52,150 | 6,883,800 tokens/s | 654 | 2,616 | 70.0% | 22,885.0% |
+| 100% | 104,300 | 13,767,600 tokens/s | 1,308 | 5,232 | 70.0% | 45,769.9% |
 
 ![](outputs/agentic_resource_utilization.png)
 ![](outputs/agentic_latency.png)
 
 ## 结果解读
 
-事件速率模型表明，高并发主要由高频业务请求、AN 释放、切换和寻呼事件驱动。如果 `10%` 的意图请求调用 Qwen3，`8 x 910B4` 实验室服务器不足以支撑默认 `3.6M` 用户生产场景。按 tensor parallel size `4` 计算，8 张 NPU 只能提供两个 Qwen3 副本，而 `100%` 可携带意图流量下生产规划需要 `31` 个副本，即 `124` 张 NPU。
+事件速率模型表明，高并发主要由高频业务请求、AN 释放、切换和寻呼事件驱动。如果 `10%` 的意图请求调用 Qwen3，`8 x 910B4` 实验室服务器不足以支撑默认 `3.6M` 用户生产场景。按 tensor parallel size `4` 计算，8 张 NPU 只能提供两个 Qwen3 副本，而 `100%` 意图流量下生产规划需要 `131` 个副本，即 `524` 张 NPU。
 
-主要结论是：总用户/事件负载首先施压于确定性 CPU 处理，而提高意图流量会增加 CPU、内存流量、带宽和 Qwen3 token 需求。在生产 NPU 规划后，默认 `10%` Qwen3 调用场景需要 `124` 张 NPU，系统表现为 CPU 退化但不是 Qwen3 失稳：CPU 利用率为 `77.2%`，规划后的 Qwen3 利用率为 `67.9%`，控制面带宽为 `9.083 Gbps`。
+主要结论是：总用户/事件负载首先施压于确定性 CPU 处理，而提高意图流量会增加 CPU、内存流量、带宽和 Qwen3 token 需求。在生产 NPU 规划后，默认 `10%` Qwen3 调用场景在 `100%` 意图流量下需要 `524` 张 NPU，但满负载场景会因 CPU 超载而失稳，除非增加 CPU 容量、降低意图比例、降低 CPU 侧处理成本或引入准入控制。
 
 ## 局限性
 

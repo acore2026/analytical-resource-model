@@ -22,7 +22,6 @@ class EventType:
     base_latency_ms: float
     base_cpu_ms: float
     base_bandwidth_kb: float
-    intent_eligible: bool
 
 
 @dataclass(frozen=True)
@@ -59,16 +58,16 @@ class ModelConfig:
 
 
 EVENTS: List[EventType] = [
-    EventType("initial_registration", 0.1, 30.0, 2.0, 12.0, False),
-    EventType("periodic_registration", 0.1, 25.0, 1.5, 10.0, False),
-    EventType("mobility_registration", 7.0, 30.0, 2.0, 12.0, False),
-    EventType("initial_pdu_session_establishment", 1.0, 40.0, 2.5, 16.0, True),
-    EventType("pdu_session_release", 1.0, 25.0, 1.5, 10.0, False),
-    EventType("pdu_session_modification", 2.0, 30.0, 2.0, 12.0, True),
-    EventType("service_request", 21.0, 20.0, 1.2, 8.0, True),
-    EventType("an_release", 35.0, 15.0, 0.8, 6.0, False),
-    EventType("handover", 23.1, 25.0, 1.8, 12.0, False),
-    EventType("paging", 14.0, 12.0, 0.6, 4.0, False),
+    EventType("initial_registration", 0.1, 30.0, 2.0, 12.0),
+    EventType("periodic_registration", 0.1, 25.0, 1.5, 10.0),
+    EventType("mobility_registration", 7.0, 30.0, 2.0, 12.0),
+    EventType("initial_pdu_session_establishment", 1.0, 40.0, 2.5, 16.0),
+    EventType("pdu_session_release", 1.0, 25.0, 1.5, 10.0),
+    EventType("pdu_session_modification", 2.0, 30.0, 2.0, 12.0),
+    EventType("service_request", 21.0, 20.0, 1.2, 8.0),
+    EventType("an_release", 35.0, 15.0, 0.8, 6.0),
+    EventType("handover", 23.1, 25.0, 1.8, 12.0),
+    EventType("paging", 14.0, 12.0, 0.6, 4.0),
 ]
 
 INTENT_SETTINGS = [0.00, 0.01, 0.05, 0.10, 0.20, 0.50, 1.00]
@@ -117,10 +116,10 @@ def fmt(value: float) -> str:
     return f"{value:.3f}"
 
 
-def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, float | str]:
+def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]:
     rps_total = total_rps(config)
-    intent_eligible_rps = sum(event_rps(config, event) for event in EVENTS if event.intent_eligible)
-    intent_rps = intent_eligible_rps * eligible_intent_ratio
+    intent_candidate_rps = rps_total
+    intent_rps = intent_candidate_rps * intent_ratio
     actual_intent_share = intent_rps / rps_total if rps_total > 0 else 0.0
     npu_total_hbm_gb = config.npu_count * config.npu_hbm_per_npu_gb
     qwen3_tokens_per_request = (
@@ -204,7 +203,7 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
     unstable = cpu_util >= 1.0 or npu_util >= 1.0 or network_util >= 1.0
     for event in EVENTS:
         event_share = event_rps(config, event) / rps_total if rps_total > 0 else 0.0
-        event_intent_share = eligible_intent_ratio if event.intent_eligible else 0.0
+        event_intent_share = intent_ratio
         non_intent_latency = (
             event.base_latency_ms
             + config.non_intent_agent_latency_ms
@@ -260,8 +259,8 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
         "required_production_npus": required_production_npus,
         "production_npu_total_hbm_gb": production_npu_total_hbm_gb,
         "total_rps": rps_total,
-        "eligible_intent_ratio": eligible_intent_ratio,
-        "intent_eligible_rps": intent_eligible_rps,
+        "intent_ratio": intent_ratio,
+        "intent_candidate_rps": intent_candidate_rps,
         "actual_total_intent_share": actual_intent_share,
         "intent_rps": intent_rps,
         "cpu_ms_per_request": cpu_ms_per_request,
@@ -307,7 +306,7 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
         return
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    x = [100.0 * float(r["eligible_intent_ratio"]) for r in rows]
+    x = [100.0 * float(r["intent_ratio"]) for r in rows]
 
     def finite_series(key: str) -> List[float | None]:
         values: List[float | None] = []
@@ -322,7 +321,7 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
     plt.plot(x, [float(r["network_utilization"]) * 100.0 for r in rows], marker="o", label="Network")
     plt.axhline(70, color="tab:orange", linestyle="--", linewidth=1, label="70% threshold")
     plt.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
-    plt.xlabel("Eligible intent ratio (%)")
+    plt.xlabel("Intent ratio across all requests (%)")
     plt.ylabel("Resource utilization (%)")
     plt.title("Resource utilization vs. intent ratio")
     plt.grid(True, alpha=0.3)
@@ -335,7 +334,7 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
     plt.plot(x, finite_series("mean_latency_ms"), marker="o", label="mean")
     plt.plot(x, finite_series("p95_latency_ms"), marker="o", label="p95")
     plt.plot(x, finite_series("p99_latency_ms"), marker="o", label="p99")
-    plt.xlabel("Eligible intent ratio (%)")
+    plt.xlabel("Intent ratio across all requests (%)")
     plt.ylabel("Latency (ms)")
     plt.title("Control-plane latency vs. intent ratio")
     plt.grid(True, alpha=0.3)

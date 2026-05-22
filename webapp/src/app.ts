@@ -42,7 +42,6 @@ interface EventDefinition {
   baseLatencyMs: number;
   baseCpuMs: number;
   baseBandwidthKb: number;
-  intentEligible: boolean;
 }
 
 interface EventLoad extends EventDefinition {
@@ -51,7 +50,7 @@ interface EventLoad extends EventDefinition {
 
 interface Result {
   totalRps: number;
-  eligibleRps: number;
+  intentCandidateRps: number;
   intentRatio: number;
   actualIntentShare: number;
   intentRps: number;
@@ -103,16 +102,16 @@ const BASELINE: Baseline = {
 };
 
 const EVENTS: EventDefinition[] = [
-  { key: "initialRegistration", inputId: "eventInitialRegistration", labelKey: "initialRegistration", tipKey: "initialRegistrationTip", perUserPerHour: 0.1, baseLatencyMs: 30, baseCpuMs: 2.0, baseBandwidthKb: 12, intentEligible: false },
-  { key: "periodicRegistration", inputId: "eventPeriodicRegistration", labelKey: "periodicRegistration", tipKey: "periodicRegistrationTip", perUserPerHour: 0.1, baseLatencyMs: 25, baseCpuMs: 1.5, baseBandwidthKb: 10, intentEligible: false },
-  { key: "mobilityRegistration", inputId: "eventMobilityRegistration", labelKey: "mobilityRegistration", tipKey: "mobilityRegistrationTip", perUserPerHour: 7.0, baseLatencyMs: 30, baseCpuMs: 2.0, baseBandwidthKb: 12, intentEligible: false },
-  { key: "initialPdu", inputId: "eventInitialPdu", labelKey: "initialPdu", tipKey: "initialPduTip", perUserPerHour: 1.0, baseLatencyMs: 40, baseCpuMs: 2.5, baseBandwidthKb: 16, intentEligible: true },
-  { key: "pduRelease", inputId: "eventPduRelease", labelKey: "pduRelease", tipKey: "pduReleaseTip", perUserPerHour: 1.0, baseLatencyMs: 25, baseCpuMs: 1.5, baseBandwidthKb: 10, intentEligible: false },
-  { key: "pduModification", inputId: "eventPduModification", labelKey: "pduModification", tipKey: "pduModificationTip", perUserPerHour: 2.0, baseLatencyMs: 30, baseCpuMs: 2.0, baseBandwidthKb: 12, intentEligible: true },
-  { key: "serviceRequest", inputId: "eventServiceRequest", labelKey: "serviceRequest", tipKey: "serviceRequestTip", perUserPerHour: 21.0, baseLatencyMs: 20, baseCpuMs: 1.2, baseBandwidthKb: 8, intentEligible: true },
-  { key: "anRelease", inputId: "eventAnRelease", labelKey: "anRelease", tipKey: "anReleaseTip", perUserPerHour: 35.0, baseLatencyMs: 15, baseCpuMs: 0.8, baseBandwidthKb: 6, intentEligible: false },
-  { key: "handover", inputId: "eventHandover", labelKey: "handover", tipKey: "handoverTip", perUserPerHour: 23.1, baseLatencyMs: 25, baseCpuMs: 1.8, baseBandwidthKb: 12, intentEligible: false },
-  { key: "paging", inputId: "eventPaging", labelKey: "paging", tipKey: "pagingTip", perUserPerHour: 14.0, baseLatencyMs: 12, baseCpuMs: 0.6, baseBandwidthKb: 4, intentEligible: false }
+  { key: "initialRegistration", inputId: "eventInitialRegistration", labelKey: "initialRegistration", tipKey: "initialRegistrationTip", perUserPerHour: 0.1, baseLatencyMs: 30, baseCpuMs: 2.0, baseBandwidthKb: 12 },
+  { key: "periodicRegistration", inputId: "eventPeriodicRegistration", labelKey: "periodicRegistration", tipKey: "periodicRegistrationTip", perUserPerHour: 0.1, baseLatencyMs: 25, baseCpuMs: 1.5, baseBandwidthKb: 10 },
+  { key: "mobilityRegistration", inputId: "eventMobilityRegistration", labelKey: "mobilityRegistration", tipKey: "mobilityRegistrationTip", perUserPerHour: 7.0, baseLatencyMs: 30, baseCpuMs: 2.0, baseBandwidthKb: 12 },
+  { key: "initialPdu", inputId: "eventInitialPdu", labelKey: "initialPdu", tipKey: "initialPduTip", perUserPerHour: 1.0, baseLatencyMs: 40, baseCpuMs: 2.5, baseBandwidthKb: 16 },
+  { key: "pduRelease", inputId: "eventPduRelease", labelKey: "pduRelease", tipKey: "pduReleaseTip", perUserPerHour: 1.0, baseLatencyMs: 25, baseCpuMs: 1.5, baseBandwidthKb: 10 },
+  { key: "pduModification", inputId: "eventPduModification", labelKey: "pduModification", tipKey: "pduModificationTip", perUserPerHour: 2.0, baseLatencyMs: 30, baseCpuMs: 2.0, baseBandwidthKb: 12 },
+  { key: "serviceRequest", inputId: "eventServiceRequest", labelKey: "serviceRequest", tipKey: "serviceRequestTip", perUserPerHour: 21.0, baseLatencyMs: 20, baseCpuMs: 1.2, baseBandwidthKb: 8 },
+  { key: "anRelease", inputId: "eventAnRelease", labelKey: "anRelease", tipKey: "anReleaseTip", perUserPerHour: 35.0, baseLatencyMs: 15, baseCpuMs: 0.8, baseBandwidthKb: 6 },
+  { key: "handover", inputId: "eventHandover", labelKey: "handover", tipKey: "handoverTip", perUserPerHour: 23.1, baseLatencyMs: 25, baseCpuMs: 1.8, baseBandwidthKb: 12 },
+  { key: "paging", inputId: "eventPaging", labelKey: "paging", tipKey: "pagingTip", perUserPerHour: 14.0, baseLatencyMs: 12, baseCpuMs: 0.6, baseBandwidthKb: 4 }
 ];
 
 const SWEEP = [0, 1, 5, 10, 20, 50, 100];
@@ -153,7 +152,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     agentCost: "Agent Cost",
     userCount: "User count",
     pduSessionsPerUser: "PDU sessions per user",
-    intentRatio: "Intent ratio among eligible events",
+    intentRatio: "Intent ratio across all requests",
     initialRegistration: "Initial registration",
     periodicRegistration: "Periodic registration",
     mobilityRegistration: "Mobility registration",
@@ -168,7 +167,6 @@ const I18N: Record<Lang, Record<string, string>> = {
     eventName: "Event",
     perUserHour: "Per user/hour",
     derivedRps: "Request/s",
-    eligible: "Intent",
     yes: "Yes",
     no: "No",
     cpuCores: "CPU cores",
@@ -196,12 +194,12 @@ const I18N: Record<Lang, Record<string, string>> = {
     p95LatencyMetric: "p95 latency (ms)",
     p99LatencyMetric: "p99 latency (ms)",
     intentSweep: "Intent Sweep",
-    intentSweepDescription: "X-axis: intent-bearing share within eligible events. Y-axis: CPU, sized Qwen3, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.",
-    xAxisLabel: "Eligible intent ratio (%)",
+    intentSweepDescription: "X-axis: intent-bearing share across all request types. Y-axis: CPU, sized Qwen3, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.",
+    xAxisLabel: "Intent ratio (%)",
     yAxisLabel: "Resource utilization (%)",
-    intentSweepAria: "Line chart showing CPU, sized Qwen3, and network utilization by eligible intent ratio.",
+    intentSweepAria: "Line chart showing CPU, sized Qwen3, and network utilization by intent ratio.",
     calculatedSweep: "Calculated Sweep",
-    tableEligibleIntent: "Eligible intent (%)",
+    tableIntentRatio: "Intent ratio (%)",
     tableTotalIntent: "Total intent (%)",
     tableIntentRate: "Intent rate (req/s)",
     tableCpuUtil: "CPU util (%)",
@@ -212,14 +210,14 @@ const I18N: Record<Lang, Record<string, string>> = {
     tableStatus: "Status",
     userCountTip: "Number of users represented by the model. Event request rates scale linearly with this value.",
     pduSessionsPerUserTip: "Average PDU sessions per user. It is a scenario descriptor; change event frequencies to model session-driven traffic changes.",
-    intentRatioTip: "Share of initial PDU establishment, PDU modification, and service request events that carry user intent.",
+    intentRatioTip: "Share of all control-plane requests that carry user intent.",
     initialRegistrationTip: "How often one user triggers initial registration in one hour.",
     periodicRegistrationTip: "How often one user triggers periodic registration update in one hour.",
     mobilityRegistrationTip: "How often one user triggers mobility registration update in one hour.",
-    initialPduTip: "How often one user establishes an initial PDU session in one hour. This event is intent-eligible.",
+    initialPduTip: "How often one user establishes an initial PDU session in one hour.",
     pduReleaseTip: "How often one user releases a PDU session in one hour.",
-    pduModificationTip: "How often one user modifies a PDU session in one hour. This event is intent-eligible.",
-    serviceRequestTip: "How often one user triggers service request in one hour. This event is intent-eligible.",
+    pduModificationTip: "How often one user modifies a PDU session in one hour.",
+    serviceRequestTip: "How often one user triggers service request in one hour.",
     anReleaseTip: "How often one user triggers access-network release in one hour.",
     handoverTip: "How often one user performs handover in one hour.",
     pagingTip: "How often one user receives paging in one hour.",
@@ -240,7 +238,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     intentExtraBandwidthTip: "Additional control-plane message bytes caused by agent-tool wrappers and inter-agent task messages.",
     allRequests: "of all requests",
     totalTraffic: "Total traffic",
-    eligibleTraffic: "eligible for intent",
+    intentCapableTraffic: "intent-capable requests",
     users: "users",
     sessionsPerUser: "PDU sessions/user",
     bottleneck: "Bottleneck",
@@ -273,7 +271,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     agentCost: "Agent 成本",
     userCount: "用户数",
     pduSessionsPerUser: "每用户 PDU 会话数",
-    intentRatio: "可携带意图事件中的意图比例",
+    intentRatio: "全部请求中的意图比例",
     initialRegistration: "初始注册",
     periodicRegistration: "周期注册",
     mobilityRegistration: "移动性注册",
@@ -288,7 +286,6 @@ const I18N: Record<Lang, Record<string, string>> = {
     eventName: "事件",
     perUserHour: "每用户每小时",
     derivedRps: "请求/秒",
-    eligible: "意图",
     yes: "是",
     no: "否",
     cpuCores: "CPU 核数",
@@ -316,12 +313,12 @@ const I18N: Record<Lang, Record<string, string>> = {
     p95LatencyMetric: "p95 时延（ms）",
     p99LatencyMetric: "p99 时延（ms）",
     intentSweep: "意图比例扫描",
-    intentSweepDescription: "横轴表示可携带意图事件中真正携带意图的比例。纵轴表示 CPU、规划后的 Qwen3 和网络利用率。总请求速率由用户数和事件频率推导，因此在该扫描中保持不变。",
-    xAxisLabel: "可携带意图比例（%）",
+    intentSweepDescription: "横轴表示全部请求类型中携带意图的比例。纵轴表示 CPU、规划后的 Qwen3 和网络利用率。总请求速率由用户数和事件频率推导，因此在该扫描中保持不变。",
+    xAxisLabel: "意图比例（%）",
     yAxisLabel: "资源利用率（%）",
-    intentSweepAria: "折线图，展示不同可携带意图比例下的 CPU、规划后的 Qwen3 和网络利用率。",
+    intentSweepAria: "折线图，展示不同意图比例下的 CPU、规划后的 Qwen3 和网络利用率。",
     calculatedSweep: "计算结果扫描",
-    tableEligibleIntent: "可携带意图比例（%）",
+    tableIntentRatio: "意图比例（%）",
     tableTotalIntent: "总意图比例（%）",
     tableIntentRate: "意图速率（req/s）",
     tableCpuUtil: "CPU 利用率（%）",
@@ -332,14 +329,14 @@ const I18N: Record<Lang, Record<string, string>> = {
     tableStatus: "状态",
     userCountTip: "模型中的用户数量。事件请求速率会随该值线性变化。",
     pduSessionsPerUserTip: "平均每用户 PDU 会话数。该值作为场景描述；如需建模会话驱动的流量变化，请调整事件频率。",
-    intentRatioTip: "初始 PDU 建立、PDU 会话修改和业务请求中携带用户意图的比例。",
+    intentRatioTip: "全部控制面请求中携带用户意图的比例。",
     initialRegistrationTip: "单个用户在一小时内触发初始注册的次数。",
     periodicRegistrationTip: "单个用户在一小时内触发周期注册更新的次数。",
     mobilityRegistrationTip: "单个用户在一小时内触发移动性注册更新的次数。",
-    initialPduTip: "单个用户在一小时内建立初始 PDU 会话的次数。该事件可携带意图。",
+    initialPduTip: "单个用户在一小时内建立初始 PDU 会话的次数。",
     pduReleaseTip: "单个用户在一小时内释放 PDU 会话的次数。",
-    pduModificationTip: "单个用户在一小时内修改 PDU 会话的次数。该事件可携带意图。",
-    serviceRequestTip: "单个用户在一小时内触发业务请求的次数。该事件可携带意图。",
+    pduModificationTip: "单个用户在一小时内修改 PDU 会话的次数。",
+    serviceRequestTip: "单个用户在一小时内触发业务请求的次数。",
     anReleaseTip: "单个用户在一小时内触发接入网释放的次数。",
     handoverTip: "单个用户在一小时内发生切换的次数。",
     pagingTip: "单个用户在一小时内收到寻呼的次数。",
@@ -360,7 +357,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     intentExtraBandwidthTip: "由 Agent-Tool 封装和 Agent 间任务消息带来的额外控制面消息字节数。",
     allRequests: "占全部请求",
     totalTraffic: "总流量",
-    eligibleTraffic: "可携带意图",
+    intentCapableTraffic: "可承载意图请求",
     users: "用户",
     sessionsPerUser: "PDU 会话/用户",
     bottleneck: "瓶颈",
@@ -461,9 +458,9 @@ function weightedAverage(events: EventLoad[], totalRps: number, key: keyof Event
 function evaluate(intentRatioPercent = num("intentRatio")): Result {
   const events = eventLoads();
   const totalRps = events.reduce((sum, event) => sum + event.rps, 0);
-  const eligibleRps = events.filter((event) => event.intentEligible).reduce((sum, event) => sum + event.rps, 0);
+  const intentCandidateRps = totalRps;
   const intentRatio = clamp(intentRatioPercent / 100, 0, 1);
-  const intentRps = eligibleRps * intentRatio;
+  const intentRps = intentCandidateRps * intentRatio;
   const actualIntentShare = totalRps > 0 ? intentRps / totalRps : 0;
 
   const baseCpuAvg = weightedAverage(events, totalRps, "baseCpuMs");
@@ -518,7 +515,7 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
   let meanLatency = 0;
   for (const event of events) {
     const eventShare = totalRps > 0 ? event.rps / totalRps : 0;
-    const eventIntentShare = event.intentEligible ? intentRatio : 0;
+    const eventIntentShare = intentRatio;
     const nonIntentLatency = event.baseLatencyMs + 1 + cpuDelay + networkDelay;
     const intentLatency = event.baseLatencyMs
       + 4
@@ -544,7 +541,7 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
   const systemStatus: SystemStatus = unstable ? "unstable" : classifyStatus(bottleneckUtil);
   return {
     totalRps,
-    eligibleRps,
+    intentCandidateRps,
     intentRatio,
     actualIntentShare,
     intentRps,
@@ -605,7 +602,6 @@ function updateEventTable(result: Result): void {
       <td>${t(event.labelKey)}</td>
       <td>${fmt(event.perUserPerHour, 2)}</td>
       <td>${fmt(event.rps, 0)}</td>
-      <td>${event.intentEligible ? t("yes") : t("no")}</td>
     </tr>
   `).join("");
 }
@@ -614,7 +610,7 @@ function updateSummary(result: Result): void {
   mustGet("intentRatioLabel").textContent = `${Math.round(result.intentRatio * 100)}%`;
   mustGet("actualIntentLabel").textContent = `${pct(result.actualIntentShare)} ${t("allRequests")}`;
   mustGet("trafficHint").textContent =
-    `${t("totalTraffic")}: ${fmt(result.totalRps, 0)} req/s; ${fmt(result.eligibleRps, 0)} req/s ${t("eligibleTraffic")}; ${fmt(num("userCount"), 0)} ${t("users")}; ${fmt(num("pduSessionsPerUser"), 1)} ${t("sessionsPerUser")}.`;
+    `${t("totalTraffic")}: ${fmt(result.totalRps, 0)} req/s; ${fmt(result.intentCandidateRps, 0)} req/s ${t("intentCapableTraffic")}; ${fmt(num("userCount"), 0)} ${t("users")}; ${fmt(num("pduSessionsPerUser"), 1)} ${t("sessionsPerUser")}.`;
 
   mustGet("cpuDemand").textContent = `${fmt(result.cpuCoreDemand, 1)} ${t("coresUnit")}`;
   mustGet("ramDemand").textContent = `${fmt(result.ramGb, 1)} GB`;

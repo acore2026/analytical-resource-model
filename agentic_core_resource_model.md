@@ -22,20 +22,20 @@ lambda_total [requests/s] = sum_i(lambda_i)
 
 The baseline uses `3,600,000 users` and `2 PDU sessions/user`. The PDU session count is retained as a scenario variable and does not multiply event rates automatically; session effects should be represented by changing the per-user/hour event frequencies.
 
-| Event | Default per user per hour | Derived request rate | Base latency | Base CPU | Base bandwidth | Intent-eligible |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Initial registration | 0.1 events/user/hour | 100 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request | No |
-| Periodic registration | 0.1 events/user/hour | 100 requests/s | 25 ms | 1.5 CPU-ms/request | 10 KB/request | No |
-| Mobility registration | 7.0 events/user/hour | 7,000 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request | No |
-| Initial PDU session establishment | 1.0 events/user/hour | 1,000 requests/s | 40 ms | 2.5 CPU-ms/request | 16 KB/request | Yes |
-| PDU session release | 1.0 events/user/hour | 1,000 requests/s | 25 ms | 1.5 CPU-ms/request | 10 KB/request | No |
-| PDU session modification | 2.0 events/user/hour | 2,000 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request | Yes |
-| Service request | 21.0 events/user/hour | 21,000 requests/s | 20 ms | 1.2 CPU-ms/request | 8 KB/request | Yes |
-| AN release | 35.0 events/user/hour | 35,000 requests/s | 15 ms | 0.8 CPU-ms/request | 6 KB/request | No |
-| Handover | 23.1 events/user/hour | 23,100 requests/s | 25 ms | 1.8 CPU-ms/request | 12 KB/request | No |
-| Paging | 14.0 events/user/hour | 14,000 requests/s | 12 ms | 0.6 CPU-ms/request | 4 KB/request | No |
+| Event | Default per user per hour | Derived request rate | Base latency | Base CPU | Base bandwidth |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Initial registration | 0.1 events/user/hour | 100 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request |
+| Periodic registration | 0.1 events/user/hour | 100 requests/s | 25 ms | 1.5 CPU-ms/request | 10 KB/request |
+| Mobility registration | 7.0 events/user/hour | 7,000 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request |
+| Initial PDU session establishment | 1.0 events/user/hour | 1,000 requests/s | 40 ms | 2.5 CPU-ms/request | 16 KB/request |
+| PDU session release | 1.0 events/user/hour | 1,000 requests/s | 25 ms | 1.5 CPU-ms/request | 10 KB/request |
+| PDU session modification | 2.0 events/user/hour | 2,000 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request |
+| Service request | 21.0 events/user/hour | 21,000 requests/s | 20 ms | 1.2 CPU-ms/request | 8 KB/request |
+| AN release | 35.0 events/user/hour | 35,000 requests/s | 15 ms | 0.8 CPU-ms/request | 6 KB/request |
+| Handover | 23.1 events/user/hour | 23,100 requests/s | 25 ms | 1.8 CPU-ms/request | 12 KB/request |
+| Paging | 14.0 events/user/hour | 14,000 requests/s | 12 ms | 0.6 CPU-ms/request | 4 KB/request |
 
-The baseline total is `104,300 requests/s`. Intent is only applied to initial PDU session establishment, PDU session modification, and service request. Therefore, at `100%` eligible-intent ratio, the total intent-bearing traffic is `24,000 requests/s`, or `23.0%` of all requests.
+The baseline total is `104,300 requests/s`. Any request type may carry intent, so the intent ratio is applied to the full control-plane request stream. At `100%` intent ratio, the total intent-bearing traffic is `104,300 requests/s`.
 
 ## Resource Assumptions
 
@@ -90,15 +90,15 @@ N_Q [NPUs] =
   R_Q * tensor_parallel_size
 ```
 
-For the default production scenario at `100%` eligible intent:
+For the default production scenario at `100%` intent ratio:
 
 ```text
-lambda_I = 24,000 intent requests/s
+lambda_I = 104,300 intent requests/s
 r_Q = 10%
-lambda_Q = 2,400 Qwen3 requests/s
-T_Q = 2,400 * 132 = 316,800 tokens/s
-R_Q = ceil(316,800 / (15,040 * 0.70)) = 31 replicas
-N_Q = 31 * 4 = 124 NPUs
+lambda_Q = 10,430 Qwen3 requests/s
+T_Q = 10,430 * 132 = 1,376,760 tokens/s
+R_Q = ceil(1,376,760 / (15,040 * 0.70)) = 131 replicas
+N_Q = 131 * 4 = 524 NPUs
 ```
 
 This framing avoids the unrealistic assumption that every intent request performs a full Qwen3 generation on the 8-NPU lab server.
@@ -172,11 +172,11 @@ For non-intent requests, extra agentic bandwidth is modeled as `0 KB/request` be
 
 ## Model
 
-Let `rho_I` be the intent ratio among intent-eligible events. Let `e_i` be 1 if event `i` is intent-eligible and 0 otherwise.
+Let `rho_I` be the intent ratio across all control-plane requests.
 
 ```text
-lambda_eligible [requests/s] = sum_i(lambda_i * e_i)
-lambda_I [requests/s] = rho_I * lambda_eligible
+lambda_candidate [requests/s] = lambda_total
+lambda_I [requests/s] = rho_I * lambda_candidate
 s_I [unitless] = lambda_I / lambda_total
 ```
 
@@ -227,38 +227,38 @@ This is an analytical approximation, not a telecom simulator. Mean, p95, and p99
 
 ## Analytical Results
 
-The table below fixes the user population and event frequencies, then varies only the percentage of intent among intent-eligible events.
+The table below fixes the user population and event frequencies, then varies only the percentage of all requests that carry intent.
 
-| Eligible intent ratio | Total intent share | Intent rps | Qwen3 rps | Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | Qwen3 util | Required production NPUs | Network bandwidth | Mean latency | p95 latency | Status |
+| Intent ratio | Total intent share | Intent rps | Qwen3 rps | Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | Qwen3 util | Required production NPUs | Network bandwidth | Mean latency | p95 latency | Status |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 0% | 0.0% | 0 | 0 | 0 | 156.8 | 61.3% | 53.402 Gbps | 0.0% | 0 | 6.779 Gbps | 22.9 ms | 95.1 ms | stable |
-| 1% | 0.2% | 240 | 24 | 3,168 | 157.2 | 61.4% | 54.262 Gbps | 21.1% | 4 | 6.802 Gbps | 22.9 ms | 95.8 ms | stable |
-| 5% | 1.2% | 1,200 | 120 | 15,840 | 158.9 | 62.1% | 57.702 Gbps | 52.7% | 8 | 6.894 Gbps | 23.0 ms | 98.4 ms | stable |
-| 10% | 2.3% | 2,400 | 240 | 31,680 | 160.9 | 62.9% | 62.003 Gbps | 52.7% | 16 | 7.010 Gbps | 23.2 ms | 101.8 ms | stable |
-| 20% | 4.6% | 4,800 | 480 | 63,360 | 165.0 | 64.4% | 70.605 Gbps | 60.2% | 28 | 7.240 Gbps | 23.6 ms | 109.2 ms | stable |
-| 50% | 11.5% | 12,000 | 1,200 | 158,400 | 177.2 | 69.2% | 96.410 Gbps | 65.8% | 64 | 7.931 Gbps | 25.0 ms | 137.3 ms | stable |
-| 100% | 23.0% | 24,000 | 2,400 | 316,800 | 197.6 | 77.2% | 139.418 Gbps | 67.9% | 124 | 9.083 Gbps | 28.2 ms | 219.4 ms | degraded |
+| 1% | 1.0% | 1,043 | 104 | 13,768 | 158.6 | 62.0% | 57.140 Gbps | 45.8% | 8 | 6.879 Gbps | 23.0 ms | 98.0 ms | stable |
+| 5% | 5.0% | 5,215 | 522 | 68,838 | 165.7 | 64.7% | 72.092 Gbps | 65.4% | 28 | 7.280 Gbps | 23.7 ms | 113.2 ms | stable |
+| 10% | 10.0% | 10,430 | 1,043 | 137,676 | 174.6 | 68.2% | 90.783 Gbps | 65.4% | 56 | 7.780 Gbps | 24.6 ms | 130.3 ms | stable |
+| 20% | 20.0% | 20,860 | 2,086 | 275,352 | 192.3 | 75.1% | 128.164 Gbps | 67.8% | 108 | 8.782 Gbps | 27.2 ms | 191.4 ms | degraded |
+| 50% | 50.0% | 52,150 | 5,215 | 688,380 | 245.5 | 95.9% | 240.307 Gbps | 69.3% | 264 | 11.786 Gbps | 78.3 ms | 782.8 ms | high_risk |
+| 100% | 100.0% | 104,300 | 10,430 | 1,376,760 | 334.1 | 130.5% | 427.213 Gbps | 69.9% | 524 | 16.792 Gbps | unstable | unstable | unstable |
 
 Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`. The Qwen3 sizing sensitivity sweep is available in `outputs/agentic_qwen3_sizing_sensitivity.csv`.
 
-Qwen3 production sizing at `100%` eligible intent with the optimized `15,040 tokens/s/replica` reference:
+Qwen3 production sizing at `100%` intent ratio with the optimized `15,040 tokens/s/replica` reference:
 
 | Qwen3 invocation ratio | Qwen3 rps | Token demand | Required replicas | Required NPUs | Sized Qwen3 util | 8-NPU lab util |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 5% | 1,200 | 158,400 tokens/s | 16 | 64 | 65.8% | 526.6% |
-| 10% | 2,400 | 316,800 tokens/s | 31 | 124 | 67.9% | 1,053.2% |
-| 20% | 4,800 | 633,600 tokens/s | 61 | 244 | 69.1% | 2,106.4% |
-| 50% | 12,000 | 1,584,000 tokens/s | 151 | 604 | 69.7% | 5,266.0% |
-| 100% | 24,000 | 3,168,000 tokens/s | 301 | 1,204 | 70.0% | 10,531.9% |
+| 5% | 5,215 | 688,380 tokens/s | 66 | 264 | 69.3% | 2,288.5% |
+| 10% | 10,430 | 1,376,760 tokens/s | 131 | 524 | 69.9% | 4,577.0% |
+| 20% | 20,860 | 2,753,520 tokens/s | 262 | 1,048 | 69.9% | 9,154.0% |
+| 50% | 52,150 | 6,883,800 tokens/s | 654 | 2,616 | 70.0% | 22,885.0% |
+| 100% | 104,300 | 13,767,600 tokens/s | 1,308 | 5,232 | 70.0% | 45,769.9% |
 
 ![](outputs/agentic_resource_utilization.png)
 ![](outputs/agentic_latency.png)
 
 ## Interpretation
 
-The event-rate model shows that high concurrency is dominated by frequent service request, AN release, handover, and paging events. The `8 x 910B4` lab server is not large enough for the default `3.6M`-user production scenario if Qwen3 is used for `10%` of intent requests. It provides only two Qwen3 replicas at tensor parallel size `4`, while the production model needs `31` replicas, or `124` NPUs, at `100%` eligible-intent traffic.
+The event-rate model shows that high concurrency is dominated by frequent service request, AN release, handover, and paging events. The `8 x 910B4` lab server is not large enough for the default `3.6M`-user production scenario if Qwen3 is used for `10%` of intent requests. It provides only two Qwen3 replicas at tensor parallel size `4`, while the production model needs `131` replicas, or `524` NPUs, at `100%` intent traffic.
 
-The main conclusion is that total user/event load stresses deterministic CPU processing first, while increasing intent traffic increases CPU, memory traffic, bandwidth, and Qwen3 token demand. With production NPU sizing, the default `10%` Qwen3 invocation case requires `124` NPUs and remains CPU-degraded but not Qwen3-unstable: CPU utilization is `77.2%`, sized Qwen3 utilization is `67.9%`, and control-plane bandwidth is `9.083 Gbps`.
+The main conclusion is that total user/event load stresses deterministic CPU processing first, while increasing intent traffic increases CPU, memory traffic, bandwidth, and Qwen3 token demand. With production NPU sizing, the default `10%` Qwen3 invocation case requires `524` NPUs at `100%` intent traffic, but the full-load scenario is CPU-unstable unless more CPU capacity, lower intent ratio, faster CPU-side processing, or admission control is added.
 
 ## Limitations
 

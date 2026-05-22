@@ -21,16 +21,12 @@ For example, the baseline has `3.6M users` and produces `104,300 total requests/
 
 ## Step 2: Find Intent Requests
 
-Only some procedures are intent-eligible:
+Any request type may carry intent. The intent ratio is a tunable parameter applied to the full request stream.
 
-- Initial PDU session establishment
-- PDU session modification
-- Service request
-
-At `100%` eligible-intent ratio, these produce:
+At `100%` intent ratio, the baseline produces:
 
 ```text
-intent requests = 24,000 requests/s
+intent requests = 104,300 requests/s
 ```
 
 ## Step 3: Add Agent Cost
@@ -60,7 +56,7 @@ Not every intent request calls Qwen3. The default assumes:
 So at peak:
 
 ```text
-Qwen3 requests = 24,000 * 10% = 2,400 requests/s
+Qwen3 requests = 104,300 * 10% = 10,430 requests/s
 ```
 
 The benchmark token profile is:
@@ -73,8 +69,8 @@ Therefore:
 
 ```text
 Qwen3 token demand =
-  2,400 requests/s * 132 tokens/request
-  = 316,800 tokens/s
+  10,430 requests/s * 132 tokens/request
+  = 1,376,760 tokens/s
 ```
 
 ## Step 5: Calculate Production NPUs
@@ -91,12 +87,12 @@ So:
 
 ```text
 required replicas =
-  ceil(316,800 / (15,040 * 70%))
-  = 31 replicas
+  ceil(1,376,760 / (15,040 * 70%))
+  = 131 replicas
 
 required production NPUs =
-  31 replicas * 4 NPUs/replica
-  = 124 NPUs
+  131 replicas * 4 NPUs/replica
+  = 524 NPUs
 ```
 
 ## Main Message
@@ -107,10 +103,10 @@ For the baseline production scenario:
 
 ```text
 3.6M users
-24,000 intent requests/s
+104,300 intent requests/s
 10% of intent requests invoke Qwen3
-316,800 Qwen3 tokens/s
-124 production NPUs required
+1,376,760 Qwen3 tokens/s
+524 production NPUs required
 ```
 
 This is the core logic of the analysis.

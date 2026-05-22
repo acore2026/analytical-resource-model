@@ -21,16 +21,12 @@
 
 ## 第二步：找出意图请求
 
-只有部分流程可以携带意图：
+任意请求类型都可能携带意图。意图比例是一个可调参数，应用于完整请求流。
 
-- 初始 PDU 会话建立
-- PDU 会话修改
-- 业务请求
-
-当可携带意图比例为 `100%` 时，这些流程产生：
+当意图比例为 `100%` 时，基线产生：
 
 ```text
-intent requests = 24,000 requests/s
+intent requests = 104,300 requests/s
 ```
 
 ## 第三步：增加 Agent 成本
@@ -60,7 +56,7 @@ intent requests = 24,000 requests/s
 因此在峰值下：
 
 ```text
-Qwen3 requests = 24,000 * 10% = 2,400 requests/s
+Qwen3 requests = 104,300 * 10% = 10,430 requests/s
 ```
 
 基准 token 配置为：
@@ -73,8 +69,8 @@ Qwen3 requests = 24,000 * 10% = 2,400 requests/s
 
 ```text
 Qwen3 token demand =
-  2,400 requests/s * 132 tokens/request
-  = 316,800 tokens/s
+  10,430 requests/s * 132 tokens/request
+  = 1,376,760 tokens/s
 ```
 
 ## 第五步：计算生产 NPU 数量
@@ -91,12 +87,12 @@ Qwen3 token demand =
 
 ```text
 required replicas =
-  ceil(316,800 / (15,040 * 70%))
-  = 31 replicas
+  ceil(1,376,760 / (15,040 * 70%))
+  = 131 replicas
 
 required production NPUs =
-  31 replicas * 4 NPUs/replica
-  = 124 NPUs
+  131 replicas * 4 NPUs/replica
+  = 524 NPUs
 ```
 
 ## 核心结论
@@ -107,10 +103,10 @@ required production NPUs =
 
 ```text
 3.6M users
-24,000 intent requests/s
+104,300 intent requests/s
 10% 的意图请求调用 Qwen3
-316,800 Qwen3 tokens/s
-需要 124 张生产 NPU
+1,376,760 Qwen3 tokens/s
+需要 524 张生产 NPU
 ```
 
 这就是本分析的核心逻辑。
