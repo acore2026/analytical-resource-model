@@ -63,6 +63,43 @@ The baseline total is `104,300 requests/s`. Intent is only applied to initial PD
 
 The NPU reference profile is based on an available `8 x Ascend 910B4` deployment with `32 GB HBM/NPU`. The `4,300 intent inferences/s/NPU` capacity is not a measured 910B4 result. It is the analytical threshold needed for this workload: at the peak modeled intent rate of `24,000 requests/s`, eight NPUs must each sustain about `24,000 / (8 * 0.70) = 4,286 intent inferences/s/NPU` to keep NPU utilization at or below 70%. The model therefore treats per-NPU capacity as a tunable assumption and reports a sensitivity sweep.
 
+## Ascend 910B4 NPU Capacity Rationale
+
+The available `npu-smi` snapshot establishes the deployment shape used by the model: eight `910B4` NPUs are visible and each card reports `32,768 MB` of HBM capacity. This is useful for sizing NPU count and HBM headroom, but it is not enough to derive per-request serving throughput because the snapshot does not include model type, prompt length, output length, batch size, scheduler policy, or end-to-end inference latency under load.
+
+Public material on Ascend hardware is still fragmented by variant and system vendor. Third-party specification summaries commonly place Ascend 910B-class FP16 peak compute around `320 TFLOPS`, while [Huawei's CANN documentation](https://www.hiascend.com/document/detail/en/canncommercial/800/opdevg/Ascendcopdevg/atlas_ascendc_10_0009.html) describes the Ascend AI Core compute units as Cube, Vector, and Scalar units, and [public 910B specification summaries](https://chip.computer/chips/huawei/ascend-910b) provide a useful but non-authoritative peak-compute reference. The Cube unit is the matrix engine that matters most for transformer-style inference, while the Vector and Scalar units handle non-matrix operations and control work. These facts support using the 910B4 as an accelerator-backed inference resource, but they do not directly determine `intent inferences/s/NPU`.
+
+For paper modeling, the per-NPU capacity should therefore be derived as an explicit analytical assumption:
+
+```text
+effective_npu_flops [FLOP/s] =
+  peak_npu_flops [FLOP/s] * efficiency [unitless]
+
+flops_per_intent [FLOP/request] ~=
+  2 * model_parameters [parameters] * processed_tokens [tokens/request]
+
+npu_capacity [requests/s/NPU] =
+  effective_npu_flops [FLOP/s] / flops_per_intent [FLOP/request]
+```
+
+The selected default, `4,300 intent inferences/s/NPU`, is best read as the capacity target required by the scenario:
+
+```text
+required_capacity_per_npu [requests/s/NPU] =
+  24,000 [requests/s] / (8 [NPUs] * 0.70) =
+  4,286 requests/s/NPU
+```
+
+Equivalently, if a 910B4 were budgeted at `320 TFLOP/s` peak FP16, the maximum compute budget at the 70% utilization target would be approximately:
+
+```text
+max_flops_per_request_at_70pct =
+  320e12 [FLOP/s] * 0.70 / 4,286 [requests/s] =
+  52e9 FLOP/request
+```
+
+At `30%` effective serving efficiency, this falls to about `16e9 FLOP/request`. This range is plausible for lightweight intent classification, constrained intent parsing, short-output plan selection, cached tool selection, or batched small-model inference. It is not a safe assumption for full LLM generation on every request. Therefore, the model keeps NPU capacity configurable and includes `2,000`, `3,000`, `4,300`, `5,000`, and `8,000 intent/s/NPU` sensitivity points.
+
 ## Derivation of Agentic Cost Assumptions
 
 The proposal defines several architecture behaviors that create agentic overhead: UE NAS requests are forwarded to NW-Agents with or without intent; NW-Agents check whether the request can be fulfilled under network conditions and constraints; intent requests require understanding, task composition, tool selection, and tool invocation; the Planning Agent may interact with specialized agents such as the Connection Agent; and TRF/ARF provide tool or agent metadata for discovery and selection. In the basic-procedure model, TRF/ARF metadata is assumed to be cached in the serving agent process, so repository discovery does not add a per-request network round trip.
