@@ -46,7 +46,6 @@ lambda_total [requests/s] = sum_i(lambda_i)
 | RAM 容量 | 256 GB |
 | 推理运行时 | vLLM Ascend 0.11.0 |
 | 意图推理模型 | Qwen3-30B-A3B |
-| 实验室 NPU 参考配置 | 8 x Ascend 910B4，32 GB HBM/NPU |
 | 生产 NPU 规划目标 | Qwen3 token 利用率 70% |
 | Qwen3 调用比例 | 意图请求的 10% |
 | Qwen3 token 配置 | 128 input tokens + 4 output tokens = 132 tokens/request |
@@ -64,13 +63,9 @@ lambda_total [requests/s] = sum_i(lambda_i)
 | 固定推理模型内存 | 每个活跃 NPU 占用 16 GB HBM |
 | 活跃 Qwen3 HBM | 4 MB/active Qwen3 request |
 
-`CPU-ms` 表示一个 CPU 核被占用一毫秒。例如，`2 CPU-ms/request` 在 `100,000 requests/s` 下消耗 `200 CPU cores`。在本版本中，CPU 成本表示 Kunpeng 920 CPU 核上的主机侧预算。Qwen3-30B-A3B 能力以 tokens/s 建模，再换算为所需生产 Ascend 910B4 NPU 数量。
-
-`8 x Ascend 910B4` 服务器被视为实验室参考环境，而不是服务 `3.6M` 用户的生产部署规模。生产 NPU 数量是模型输出。默认 Qwen3 调用比例为意图请求的 `10%`，并报告 `5%`、`10%`、`20%`、`50%` 和 `100%` 的敏感性点。
+`CPU-ms` 表示一个 CPU 核被占用一毫秒。例如，`2 CPU-ms/request` 在 `100,000 requests/s` 下消耗 `200 CPU cores`。在本版本中，CPU 成本表示 Kunpeng 920 CPU 核上的主机侧预算。Qwen3-30B-A3B 能力以 tokens/s 建模，再换算为所需生产 Ascend NPU 数量。默认 Qwen3 调用比例为意图请求的 `10%`，并报告 `5%`、`10%`、`20%`、`50%` 和 `100%` 的敏感性点。
 
 ## Qwen3 Token 能力依据
-
-可用的 `npu-smi` 快照可以确定本文模型采用的实验室形态：系统中可见 8 张 `910B4` NPU，每张卡报告 `32,768 MB` HBM 容量。具体推理栈为 vLLM Ascend 0.11.0 服务 Qwen3-30B-A3B，Kunpeng 920 CPU 处理主机侧运行时和 Agent 逻辑。这可以定义参考平台，但不应被理解为足以支撑完整生产负载。
 
 [GPUStack 的 Qwen3-30B-A3B on Ascend 910B 基准](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/)报告，在 `128 input tokens` 和 `4 output tokens` 的短提示配置下，优化结果为 `15,040.15 total tokens/s`。[vLLM-Ascend 文档](https://docs.vllm.ai/projects/ascend/en/v0.18.0/)包含 Qwen3-30B-A3B 指引；对于 32 GB NPU 卡，模型采用 tensor parallel size `4`，因此一个 Qwen3 副本视为 `4 NPUs`。该基准来自特定软硬件栈，应作为参考点，而不是本系统实测值。
 
@@ -101,7 +96,7 @@ R_Q = ceil(1,376,760 / (15,040 * 0.70)) = 131 replicas
 N_Q = 131 * 4 = 524 NPUs
 ```
 
-这种表述避免了不现实的假设：即每个意图请求都在 8-NPU 实验室服务器上执行完整 Qwen3 生成。
+这种表述避免了不现实的假设：即每个意图请求都执行完整 Qwen3 生成。模型将总意图流量与需要 Qwen3 的子集分开计算。
 
 ## Agentic 成本假设推导
 
@@ -223,7 +218,7 @@ u_npu [unitless] = T_Q / (R_Q * mu_Q)
 D_queue [ms] = S [ms] * u / (1 - u), for u < 1
 ```
 
-该项是分析近似，不是精确电信系统仿真。平均、p95 和 p99 时延由确定性流程时延、固定 Agent 时延、CPU 排队、Qwen3 生产 NPU 排队和网络排队组成。固定实验室 NPU 池可能超载，但生产规划结果会报告为了保持 Qwen3 token 利用率不超过目标值所需的 NPU 数量。
+该项是分析近似，不是精确电信系统仿真。平均、p95 和 p99 时延由确定性流程时延、固定 Agent 时延、CPU 排队、Qwen3 生产 NPU 排队和网络排队组成。生产规划结果会报告为了保持 Qwen3 token 利用率不超过目标值所需的 NPU 数量。
 
 ## 分析结果
 
@@ -243,20 +238,20 @@ D_queue [ms] = S [ms] * u / (1 - u), for u < 1
 
 在优化参考值 `15,040 tokens/s/replica` 下，`100%` 意图比例的 Qwen3 生产规划如下：
 
-| Qwen3 调用比例 | Qwen3 rps | Token 需求 | 所需副本 | 所需 NPU | 规划后 Qwen3 利用率 | 8-NPU 实验室利用率 |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 5% | 5,215 | 688,380 tokens/s | 66 | 264 | 69.3% | 2,288.5% |
-| 10% | 10,430 | 1,376,760 tokens/s | 131 | 524 | 69.9% | 4,577.0% |
-| 20% | 20,860 | 2,753,520 tokens/s | 262 | 1,048 | 69.9% | 9,154.0% |
-| 50% | 52,150 | 6,883,800 tokens/s | 654 | 2,616 | 70.0% | 22,885.0% |
-| 100% | 104,300 | 13,767,600 tokens/s | 1,308 | 5,232 | 70.0% | 45,769.9% |
+| Qwen3 调用比例 | Qwen3 rps | Token 需求 | 所需副本 | 所需 NPU | 规划后 Qwen3 利用率 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 5% | 5,215 | 688,380 tokens/s | 66 | 264 | 69.3% |
+| 10% | 10,430 | 1,376,760 tokens/s | 131 | 524 | 69.9% |
+| 20% | 20,860 | 2,753,520 tokens/s | 262 | 1,048 | 69.9% |
+| 50% | 52,150 | 6,883,800 tokens/s | 654 | 2,616 | 70.0% |
+| 100% | 104,300 | 13,767,600 tokens/s | 1,308 | 5,232 | 70.0% |
 
 ![](outputs/agentic_resource_utilization.png)
 ![](outputs/agentic_latency.png)
 
 ## 结果解读
 
-事件速率模型表明，高并发主要由高频业务请求、AN 释放、切换和寻呼事件驱动。如果 `10%` 的意图请求调用 Qwen3，`8 x 910B4` 实验室服务器不足以支撑默认 `3.6M` 用户生产场景。按 tensor parallel size `4` 计算，8 张 NPU 只能提供两个 Qwen3 副本，而 `100%` 意图流量下生产规划需要 `131` 个副本，即 `524` 张 NPU。
+事件速率模型表明，高并发主要由高频业务请求、AN 释放、切换和寻呼事件驱动。如果 `10%` 的意图请求调用 Qwen3，则 `100%` 意图流量下生产规划需要 `131` 个副本，即 `524` 张 NPU。
 
 主要结论是：总用户/事件负载首先施压于确定性 CPU 处理，而提高意图流量会增加 CPU、内存流量、带宽和 Qwen3 token 需求。在生产 NPU 规划后，默认 `10%` Qwen3 调用场景在 `100%` 意图流量下需要 `524` 张 NPU，但满负载场景会因 CPU 超载而失稳，除非增加 CPU 容量、降低意图比例、降低 CPU 侧处理成本或引入准入控制。
 

@@ -97,8 +97,6 @@ required production NPUs =
 
 ## Main Message
 
-The `8 x Ascend 910B4` server is a lab reference, not the full production deployment.
-
 For the baseline production scenario:
 
 ```text

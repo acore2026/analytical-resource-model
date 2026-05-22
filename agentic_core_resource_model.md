@@ -46,7 +46,6 @@ The baseline total is `104,300 requests/s`. Any request type may carry intent, s
 | RAM capacity | 256 GB |
 | Inference runtime | vLLM Ascend 0.11.0 |
 | Intent inference model | Qwen3-30B-A3B |
-| Lab NPU profile | 8 x Ascend 910B4, 32 GB HBM/NPU |
 | Production NPU sizing target | 70% Qwen3 token utilization |
 | Qwen3 invocation ratio | 10% of intent requests |
 | Qwen3 token profile | 128 input tokens + 4 output tokens = 132 tokens/request |
@@ -64,13 +63,9 @@ The baseline total is `104,300 requests/s`. Any request type may carry intent, s
 | Fixed inference model memory | 16 GB HBM per active NPU |
 | Active Qwen3 HBM | 4 MB/active Qwen3 request |
 
-`CPU-ms` means one CPU core occupied for one millisecond. For example, `2 CPU-ms/request` at `100,000 requests/s` consumes `200 CPU cores`. In this version, CPU costs are interpreted as host-side budgets on Kunpeng 920 CPU cores. Qwen3-30B-A3B capacity is modeled in tokens/s, then converted into the number of production Ascend 910B4 NPUs required.
-
-The `8 x Ascend 910B4` server is treated as a lab reference, not as the production deployment size for `3.6M` users. Production NPU count is an output of the model. The default Qwen3 invocation ratio is `10%` of intent requests, and the model also reports `5%`, `10%`, `20%`, `50%`, and `100%` sensitivity points.
+`CPU-ms` means one CPU core occupied for one millisecond. For example, `2 CPU-ms/request` at `100,000 requests/s` consumes `200 CPU cores`. In this version, CPU costs are interpreted as host-side budgets on Kunpeng 920 CPU cores. Qwen3-30B-A3B capacity is modeled in tokens/s, then converted into the number of production Ascend NPUs required. The default Qwen3 invocation ratio is `10%` of intent requests, and the model also reports `5%`, `10%`, `20%`, `50%`, and `100%` sensitivity points.
 
 ## Qwen3 Token-Capacity Rationale
-
-The available `npu-smi` snapshot establishes the lab shape used by the model: eight `910B4` NPUs are visible and each card reports `32,768 MB` of HBM capacity. The concrete inference stack is vLLM Ascend 0.11.0 serving Qwen3-30B-A3B, with Kunpeng 920 CPUs handling host-side runtime and agent logic. This is useful for defining the reference platform, but it should not be interpreted as enough capacity for the full production workload.
 
 [GPUStack's Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/) reports an optimized short-prompt result of `15,040.15 total tokens/s` for `128 input tokens` and `4 output tokens`. The [vLLM-Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/) includes Qwen3-30B-A3B guidance; for 32 GB NPU cards, the model uses tensor parallel size `4`, so one Qwen3 replica is treated as `4 NPUs`. The benchmark uses a specific software stack and should be treated as a reference point, not a measurement from this system.
 
@@ -101,7 +96,7 @@ R_Q = ceil(1,376,760 / (15,040 * 0.70)) = 131 replicas
 N_Q = 131 * 4 = 524 NPUs
 ```
 
-This framing avoids the unrealistic assumption that every intent request performs a full Qwen3 generation on the 8-NPU lab server.
+This framing avoids the unrealistic assumption that every intent request performs a full Qwen3 generation. Instead, the model separates total intent traffic from the subset that requires Qwen3.
 
 ## Derivation of Agentic Cost Assumptions
 
@@ -223,7 +218,7 @@ Queueing delay uses a simple M/M/1-inspired sensitivity term:
 D_queue [ms] = S [ms] * u / (1 - u), for u < 1
 ```
 
-This is an analytical approximation, not a telecom simulator. Mean, p95, and p99 latency are calculated from deterministic procedure latency, fixed agent latency, CPU queueing, Qwen3 production-NPU queueing, and network queueing. A fixed lab NPU pool may be over capacity, but the production sizing result reports how many NPUs are required to keep Qwen3 token utilization at or below the target.
+This is an analytical approximation, not a telecom simulator. Mean, p95, and p99 latency are calculated from deterministic procedure latency, fixed agent latency, CPU queueing, Qwen3 production-NPU queueing, and network queueing. The production sizing result reports how many NPUs are required to keep Qwen3 token utilization at or below the target.
 
 ## Analytical Results
 
@@ -243,20 +238,20 @@ Generated results are available in `outputs/agentic_resource_results.csv`. The u
 
 Qwen3 production sizing at `100%` intent ratio with the optimized `15,040 tokens/s/replica` reference:
 
-| Qwen3 invocation ratio | Qwen3 rps | Token demand | Required replicas | Required NPUs | Sized Qwen3 util | 8-NPU lab util |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 5% | 5,215 | 688,380 tokens/s | 66 | 264 | 69.3% | 2,288.5% |
-| 10% | 10,430 | 1,376,760 tokens/s | 131 | 524 | 69.9% | 4,577.0% |
-| 20% | 20,860 | 2,753,520 tokens/s | 262 | 1,048 | 69.9% | 9,154.0% |
-| 50% | 52,150 | 6,883,800 tokens/s | 654 | 2,616 | 70.0% | 22,885.0% |
-| 100% | 104,300 | 13,767,600 tokens/s | 1,308 | 5,232 | 70.0% | 45,769.9% |
+| Qwen3 invocation ratio | Qwen3 rps | Token demand | Required replicas | Required NPUs | Sized Qwen3 util |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 5% | 5,215 | 688,380 tokens/s | 66 | 264 | 69.3% |
+| 10% | 10,430 | 1,376,760 tokens/s | 131 | 524 | 69.9% |
+| 20% | 20,860 | 2,753,520 tokens/s | 262 | 1,048 | 69.9% |
+| 50% | 52,150 | 6,883,800 tokens/s | 654 | 2,616 | 70.0% |
+| 100% | 104,300 | 13,767,600 tokens/s | 1,308 | 5,232 | 70.0% |
 
 ![](outputs/agentic_resource_utilization.png)
 ![](outputs/agentic_latency.png)
 
 ## Interpretation
 
-The event-rate model shows that high concurrency is dominated by frequent service request, AN release, handover, and paging events. The `8 x 910B4` lab server is not large enough for the default `3.6M`-user production scenario if Qwen3 is used for `10%` of intent requests. It provides only two Qwen3 replicas at tensor parallel size `4`, while the production model needs `131` replicas, or `524` NPUs, at `100%` intent traffic.
+The event-rate model shows that high concurrency is dominated by frequent service request, AN release, handover, and paging events. If Qwen3 is used for `10%` of intent requests, the production model needs `131` replicas, or `524` NPUs, at `100%` intent traffic.
 
 The main conclusion is that total user/event load stresses deterministic CPU processing first, while increasing intent traffic increases CPU, memory traffic, bandwidth, and Qwen3 token demand. With production NPU sizing, the default `10%` Qwen3 invocation case requires `524` NPUs at `100%` intent traffic, but the full-load scenario is CPU-unstable unless more CPU capacity, lower intent ratio, faster CPU-side processing, or admission control is added.
 

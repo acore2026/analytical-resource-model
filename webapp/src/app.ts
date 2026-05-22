@@ -19,7 +19,6 @@ interface Baseline {
   cpuCores: number;
   nicGbps: number;
   ramGb: number;
-  npuCount: number;
   npuHbmPerNpuGb: number;
   qwen3InvocationRatio: number;
   qwen3InputTokens: number;
@@ -63,7 +62,6 @@ interface Result {
   npuUtil: number;
   qwen3RequestRps: number;
   qwen3TokenDemand: number;
-  qwen3LabUtil: number;
   requiredQwen3Replicas: number;
   requiredProductionNpus: number;
   npuHbmGb: number;
@@ -87,7 +85,6 @@ const BASELINE: Baseline = {
   cpuCores: 256,
   nicGbps: 100,
   ramGb: 256,
-  npuCount: 8,
   npuHbmPerNpuGb: 32,
   qwen3InvocationRatio: 10,
   qwen3InputTokens: 128,
@@ -122,7 +119,6 @@ const MODEL_INPUT_IDS = [
   "cpuCores",
   "nicGbps",
   "ramGb",
-  "npuCount",
   "npuHbmPerNpuGb",
   "qwen3InvocationRatio",
   "qwen3InputTokens",
@@ -172,7 +168,6 @@ const I18N: Record<Lang, Record<string, string>> = {
     cpuCores: "CPU cores",
     nicCapacity: "NIC capacity",
     ramCapacity: "RAM capacity",
-    npuCount: "NPU count",
     hbmPerNpu: "HBM per NPU",
     qwen3InvocationRatio: "Qwen3 invocation ratio",
     qwen3InputTokens: "Qwen3 input tokens",
@@ -224,8 +219,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     cpuCoresTip: "Total Kunpeng 920 CPU core capacity available to deterministic procedure handling and CPU-side agent logic.",
     nicCapacityTip: "Network interface capacity available for control-plane message traffic.",
     ramCapacityTip: "Host memory capacity for agent/NF processes, active request contexts, and runtime state.",
-    npuCountTip: "Number of NPUs in the inference pool. The reference profile uses 8 Ascend 910B4 NPUs.",
-    hbmPerNpuTip: "High-bandwidth memory available on each NPU. The reference profile uses 32 GB HBM per NPU.",
+    hbmPerNpuTip: "High-bandwidth memory available on each NPU.",
     qwen3InvocationRatioTip: "Percentage of intent requests that need Qwen3-30B-A3B. The rest use lightweight intent parsing and tool selection.",
     qwen3InputTokensTip: "Input tokens per complex intent request. The benchmark-derived default is 128.",
     qwen3OutputTokensTip: "Output tokens per complex intent request. The benchmark-derived default is 4.",
@@ -291,7 +285,6 @@ const I18N: Record<Lang, Record<string, string>> = {
     cpuCores: "CPU 核数",
     nicCapacity: "网卡容量",
     ramCapacity: "内存容量",
-    npuCount: "NPU 数量",
     hbmPerNpu: "每 NPU HBM",
     qwen3InvocationRatio: "Qwen3 调用比例",
     qwen3InputTokens: "Qwen3 输入 token",
@@ -343,8 +336,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     cpuCoresTip: "可用于确定性流程处理和 Agent CPU 侧逻辑的 Kunpeng 920 总 CPU 核数。",
     nicCapacityTip: "可用于控制面消息传输的网卡容量。",
     ramCapacityTip: "主机内存容量，用于 Agent/NF 进程、活跃请求上下文和运行状态。",
-    npuCountTip: "推理池中的 NPU 数量。参考配置使用 8 张 Ascend 910B4 NPU。",
-    hbmPerNpuTip: "每个 NPU 可用的高带宽内存。参考配置为每 NPU 32 GB HBM。",
+    hbmPerNpuTip: "每个 NPU 可用的高带宽内存。",
     qwen3InvocationRatioTip: "需要调用 Qwen3-30B-A3B 的意图请求比例。其他意图请求使用轻量意图解析和工具选择。",
     qwen3InputTokensTip: "每个复杂意图请求的输入 token 数。基准默认值为 128。",
     qwen3OutputTokensTip: "每个复杂意图请求的输出 token 数。基准默认值为 4。",
@@ -480,7 +472,6 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
   const networkUtil = networkGbps / Math.max(1, num("nicGbps"));
   const networkDelay = queueDelayMs(networkUtil, 0.1);
 
-  const npuCount = Math.max(0, num("npuCount"));
   const qwen3InvocationRatio = clamp(num("qwen3InvocationRatio") / 100, 0, 1);
   const qwen3InputTokens = Math.max(1, num("qwen3InputTokens"));
   const qwen3OutputTokens = Math.max(1, num("qwen3OutputTokens"));
@@ -490,9 +481,6 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
   const qwen3TargetUtil = clamp(num("qwen3TargetUtil") / 100, 0.01, 1);
   const qwen3RequestRps = intentRps * qwen3InvocationRatio;
   const qwen3TokenDemand = qwen3RequestRps * qwen3TokensPerRequest;
-  const labReplicas = Math.floor(npuCount / qwen3TensorParallel);
-  const qwen3LabCapacity = labReplicas * qwen3TokenCapacity;
-  const qwen3LabUtil = qwen3LabCapacity > 0 ? qwen3TokenDemand / qwen3LabCapacity : Infinity;
   const requiredQwen3Replicas = qwen3TokenDemand > 0 ? Math.ceil(qwen3TokenDemand / (qwen3TokenCapacity * qwen3TargetUtil)) : 0;
   const requiredProductionNpus = requiredQwen3Replicas * Math.ceil(qwen3TensorParallel);
   const productionCapacity = requiredQwen3Replicas * qwen3TokenCapacity;
@@ -554,7 +542,6 @@ function evaluate(intentRatioPercent = num("intentRatio")): Result {
     npuUtil,
     qwen3RequestRps,
     qwen3TokenDemand,
-    qwen3LabUtil,
     requiredQwen3Replicas,
     requiredProductionNpus,
     npuHbmGb,

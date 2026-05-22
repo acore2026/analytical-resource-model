@@ -97,8 +97,6 @@ required production NPUs =
 
 ## 核心结论
 
-`8 x Ascend 910B4` 服务器是实验室参考环境，不是完整生产部署规模。
-
 在默认生产场景下：
 
 ```text

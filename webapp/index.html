@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Agentic Core Resource Lab</title>
+    <title>Agentic Core Resource Calculator</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -11,7 +11,7 @@
       <section class="mast">
         <div>
           <p class="eyebrow">6G Agentic Core</p>
-          <h1>Resource Lab</h1>
+          <h1>Resource Calculator</h1>
         </div>
         <div class="mast-actions">
           <button id="langToggle" class="lang-toggle" type="button" aria-label="Toggle language">中文</button>
@@ -123,7 +123,7 @@
 
           <div class="stack-profile" aria-label="Reference inference profile">
             <span data-i18n="referenceProfile">Reference profile</span>
-            <strong>Kunpeng 920 + 8x Ascend 910B4</strong>
+            <strong>Kunpeng 920 + Ascend NPU inference pool</strong>
             <small>vLLM Ascend 0.11.0 · Qwen3-30B-A3B</small>
           </div>
           <p class="source-note">
@@ -146,11 +146,7 @@
               <input id="ramGb" type="number" min="1" step="1" value="256">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="npuCount">NPU count</span> <span class="unit">(NPUs)</span><span class="help" data-tip-key="npuCountTip" data-tip="Number of NPUs in the inference pool. The reference profile uses 8 Ascend 910B4 NPUs.">?</span></span>
-              <input id="npuCount" type="number" min="0" step="1" value="8">
-            </label>
-            <label class="field compact">
-              <span class="label-line"><span data-i18n="hbmPerNpu">HBM per NPU</span> <span class="unit">(GB/NPU)</span><span class="help" data-tip-key="hbmPerNpuTip" data-tip="High-bandwidth memory available on each NPU. The reference profile uses 32 GB HBM per NPU.">?</span></span>
+              <span class="label-line"><span data-i18n="hbmPerNpu">HBM per NPU</span> <span class="unit">(GB/NPU)</span><span class="help" data-tip-key="hbmPerNpuTip" data-tip="High-bandwidth memory available on each NPU.">?</span></span>
               <input id="npuHbmPerNpuGb" type="number" min="1" step="1" value="32">
             </label>
             <label class="field compact">

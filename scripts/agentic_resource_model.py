@@ -31,7 +31,6 @@ class ModelConfig:
     cpu_cores: float = 256.0
     nic_gbps: float = 100.0
     ram_gb: float = 256.0
-    npu_count: float = 8.0
     npu_hbm_per_npu_gb: float = 32.0
     cpu_degraded_util: float = 0.70
     cpu_high_risk_util: float = 0.85
@@ -121,17 +120,12 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     intent_candidate_rps = rps_total
     intent_rps = intent_candidate_rps * intent_ratio
     actual_intent_share = intent_rps / rps_total if rps_total > 0 else 0.0
-    npu_total_hbm_gb = config.npu_count * config.npu_hbm_per_npu_gb
     qwen3_tokens_per_request = (
         config.qwen3_input_tokens_per_request
         + config.qwen3_output_tokens_per_request
     )
     qwen3_request_rps = intent_rps * config.qwen3_invocation_ratio
     qwen3_token_demand_tps = qwen3_request_rps * qwen3_tokens_per_request
-    qwen3_lab_replicas = math.floor(
-        config.npu_count / max(1.0, config.qwen3_tensor_parallel_size)
-    )
-    qwen3_lab_token_capacity_tps = qwen3_lab_replicas * config.qwen3_token_capacity_per_replica
     required_qwen3_replicas = (
         math.ceil(qwen3_token_demand_tps / (
             config.qwen3_token_capacity_per_replica * config.qwen3_target_util
@@ -141,11 +135,6 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     )
     required_production_npus = required_qwen3_replicas * math.ceil(config.qwen3_tensor_parallel_size)
     qwen3_production_token_capacity_tps = required_qwen3_replicas * config.qwen3_token_capacity_per_replica
-    qwen3_lab_utilization = (
-        qwen3_token_demand_tps / qwen3_lab_token_capacity_tps
-        if qwen3_lab_token_capacity_tps
-        else math.inf
-    )
 
     base_cpu_ms_avg = weighted_average(config, "base_cpu_ms")
     agent_cpu_ms_avg = (
@@ -239,9 +228,7 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     result: Dict[str, float | str] = {
         "user_count": config.user_count,
         "pdu_sessions_per_user": config.pdu_sessions_per_user,
-        "npu_count": config.npu_count,
         "npu_hbm_per_npu_gb": config.npu_hbm_per_npu_gb,
-        "npu_total_hbm_gb": npu_total_hbm_gb,
         "qwen3_invocation_ratio": config.qwen3_invocation_ratio,
         "qwen3_input_tokens_per_request": config.qwen3_input_tokens_per_request,
         "qwen3_output_tokens_per_request": config.qwen3_output_tokens_per_request,
@@ -251,9 +238,6 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
         "qwen3_target_utilization": config.qwen3_target_util,
         "qwen3_request_rps": qwen3_request_rps,
         "qwen3_token_demand_tps": qwen3_token_demand_tps,
-        "qwen3_lab_replicas": qwen3_lab_replicas,
-        "qwen3_lab_token_capacity_tps": qwen3_lab_token_capacity_tps,
-        "qwen3_lab_utilization": qwen3_lab_utilization,
         "qwen3_production_token_capacity_tps": qwen3_production_token_capacity_tps,
         "required_qwen3_replicas": required_qwen3_replicas,
         "required_production_npus": required_production_npus,
