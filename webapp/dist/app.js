@@ -100,24 +100,24 @@ const I18N = {
         resetBaseline: "Reset baseline",
         cpuDemandMetric: "CPU demand (cores)",
         memoryMetric: "Memory (GB)",
-        qwen3LoadMetric: "Qwen3 load (%)",
-        productionNpuMetric: "Production NPUs",
+        qwen3LoadMetric: "Sized Qwen3 util (%)",
+        productionNpuMetric: "Required Qwen3 NPUs",
         bandwidthMetric: "Bandwidth (Gbps)",
         meanLatencyMetric: "Mean latency (ms)",
         p95LatencyMetric: "p95 latency (ms)",
         p99LatencyMetric: "p99 latency (ms)",
         intentSweep: "Intent Sweep",
-        intentSweepDescription: "X-axis: intent-bearing share across all request types. Y-axis: CPU, sized Qwen3, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.",
+        intentSweepDescription: "X-axis: intent-bearing share across all request types. Left Y-axis: CPU and network utilization. Right Y-axis: required Qwen3 NPUs. The Qwen3 line is NPU count, not utilization.",
         xAxisLabel: "Intent ratio (%)",
-        yAxisLabel: "Resource utilization (%)",
-        intentSweepAria: "Line chart showing CPU, sized Qwen3, and network utilization by intent ratio.",
+        yAxisLabel: "CPU/Network util (%) · Qwen3 NPUs",
+        intentSweepAria: "Line chart showing CPU utilization, network utilization, and required Qwen3 NPU count by intent ratio.",
         calculatedSweep: "Calculated Sweep",
         tableIntentRatio: "Intent ratio (%)",
         tableTotalIntent: "Total intent (%)",
         tableIntentRate: "Intent rate (req/s)",
         tableCpuUtil: "CPU util (%)",
-        tableNpuUtil: "Qwen3 util (%)",
-        tableProdNpus: "Prod NPUs",
+        tableTokens: "Qwen3 tokens/s",
+        tableProdNpus: "Required Qwen3 NPUs",
         tableBw: "BW (Gbps)",
         tableMean: "Mean (ms)",
         tableStatus: "Status",
@@ -217,24 +217,24 @@ const I18N = {
         resetBaseline: "重置基线",
         cpuDemandMetric: "CPU 需求（核）",
         memoryMetric: "内存（GB）",
-        qwen3LoadMetric: "Qwen3 负载（%）",
-        productionNpuMetric: "生产 NPU",
+        qwen3LoadMetric: "规划后 Qwen3 利用率（%）",
+        productionNpuMetric: "所需 Qwen3 NPU",
         bandwidthMetric: "带宽（Gbps）",
         meanLatencyMetric: "平均时延（ms）",
         p95LatencyMetric: "p95 时延（ms）",
         p99LatencyMetric: "p99 时延（ms）",
         intentSweep: "意图比例扫描",
-        intentSweepDescription: "横轴表示全部请求类型中携带意图的比例。纵轴表示 CPU、规划后的 Qwen3 和网络利用率。总请求速率由用户数和事件频率推导，因此在该扫描中保持不变。",
+        intentSweepDescription: "横轴表示全部请求类型中携带意图的比例。左纵轴表示 CPU 和网络利用率。右纵轴表示所需 Qwen3 NPU 数量。Qwen3 折线表示 NPU 数量，不表示利用率。",
         xAxisLabel: "意图比例（%）",
-        yAxisLabel: "资源利用率（%）",
-        intentSweepAria: "折线图，展示不同意图比例下的 CPU、规划后的 Qwen3 和网络利用率。",
+        yAxisLabel: "CPU/网络利用率（%）· Qwen3 NPU 数",
+        intentSweepAria: "折线图，展示不同意图比例下的 CPU 利用率、网络利用率和所需 Qwen3 NPU 数量。",
         calculatedSweep: "计算结果扫描",
         tableIntentRatio: "意图比例（%）",
         tableTotalIntent: "总意图比例（%）",
         tableIntentRate: "意图速率（req/s）",
         tableCpuUtil: "CPU 利用率（%）",
-        tableNpuUtil: "Qwen3 利用率（%）",
-        tableProdNpus: "生产 NPU",
+        tableTokens: "Qwen3 tokens/s",
+        tableProdNpus: "所需 Qwen3 NPU",
         tableBw: "带宽（Gbps）",
         tableMean: "平均值（ms）",
         tableStatus: "状态",
@@ -528,8 +528,8 @@ function updateTable(rows) {
       <td>${Math.round(row.intentRatio * 100)}%</td>
       <td>${pct(row.actualIntentShare)}</td>
       <td>${fmt(row.intentRps, 0)}</td>
+      <td>${fmt(row.qwen3TokenDemand, 0)}</td>
       <td>${pct(row.cpuUtil)}</td>
-      <td>${pct(row.npuUtil)}</td>
       <td>${fmt(row.requiredProductionNpus, 0)}</td>
       <td>${fmt(row.networkGbps, 3)} Gbps</td>
       <td>${fmt(row.meanLatency, 1)} ms</td>
@@ -547,13 +547,14 @@ function drawChart(rows) {
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = "#fbfcf8";
     ctx.fillRect(0, 0, width, height);
-    const pad = { left: 58, right: 44, top: 24, bottom: 44 };
+    const pad = { left: 64, right: 88, top: 24, bottom: 44 };
     const plotW = width - pad.left - pad.right;
     const plotH = height - pad.top - pad.bottom;
     const x = (index) => pad.left + (index / (rows.length - 1)) * plotW;
     const y = (value, max) => pad.top + plotH - (clamp(value, 0, max) / max) * plotH;
-    const finiteUtils = rows.flatMap((row) => [row.cpuUtil, row.npuUtil, row.networkUtil]).filter(Number.isFinite);
+    const finiteUtils = rows.flatMap((row) => [row.cpuUtil, row.networkUtil]).filter(Number.isFinite);
     const maxUtil = Math.max(1.1, ...finiteUtils);
+    const maxNpus = Math.max(10, Math.ceil(Math.max(...rows.map((row) => row.requiredProductionNpus)) / 100) * 100);
     ctx.strokeStyle = "#d7ddd3";
     ctx.lineWidth = 1;
     ctx.fillStyle = "#5f6a61";
@@ -565,13 +566,15 @@ function drawChart(rows) {
         ctx.lineTo(width - pad.right, gy);
         ctx.stroke();
         ctx.fillText(`${Math.round((1 - i / 4) * maxUtil * 100)}%`, 10, gy + 6);
+        ctx.textAlign = "right";
+        ctx.fillText(`${Math.round((1 - i / 4) * maxNpus)}`, width - 12, gy + 6);
+        ctx.textAlign = "left";
     }
-    const series = [
+    const utilSeries = [
         { key: "cpuUtil", label: t("cpu"), color: "#3c8b4a" },
-        { key: "npuUtil", label: t("npu"), color: "#d66a00" },
         { key: "networkUtil", label: t("network"), color: "#1769d1" }
     ];
-    for (const item of series) {
+    for (const item of utilSeries) {
         ctx.strokeStyle = item.color;
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -589,6 +592,22 @@ function drawChart(rows) {
             ctx.fillRect(x(index) - 4, y(row[item.key], maxUtil) - 4, 8, 8);
         });
     }
+    ctx.strokeStyle = "#d66a00";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    rows.forEach((row, index) => {
+        const pointX = x(index);
+        const pointY = y(row.requiredProductionNpus, maxNpus);
+        if (index === 0)
+            ctx.moveTo(pointX, pointY);
+        else
+            ctx.lineTo(pointX, pointY);
+    });
+    ctx.stroke();
+    rows.forEach((row, index) => {
+        ctx.fillStyle = "#d66a00";
+        ctx.fillRect(x(index) - 4, y(row.requiredProductionNpus, maxNpus) - 4, 8, 8);
+    });
     ctx.strokeStyle = "#c94d41";
     ctx.setLineDash([10, 8]);
     ctx.beginPath();
@@ -604,12 +623,16 @@ function drawChart(rows) {
     });
     let legendX = pad.left;
     ctx.textAlign = "left";
-    for (const item of series) {
+    const legend = [
+        ...utilSeries,
+        { label: t("productionNpuMetric"), color: "#d66a00" }
+    ];
+    for (const item of legend) {
         ctx.fillStyle = item.color;
         ctx.fillRect(legendX, 18, 14, 14);
         ctx.fillStyle = "#1d241f";
         ctx.fillText(item.label, legendX + 20, 32);
-        legendX += 110;
+        legendX += item.label.length > 14 ? 190 : 120;
     }
 }
 function applyTranslations() {

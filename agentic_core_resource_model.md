@@ -2,7 +2,7 @@
 
 [中文版本](agentic_core_resource_model_zh.md)
 
-This document provides a theoretical resource model for the proposed agentic 6G core architecture. It does not claim deployment measurements. The goal is to estimate whether NW-Agent reasoning, tool invocation, and agent cooperation can remain bounded under high-concurrency control-plane workloads.
+This document provides an analytical resource model for the proposed agentic 6G core architecture. The model estimates NW-Agent reasoning, tool invocation, and agent cooperation cost under high-concurrency control-plane workloads.
 
 The model separates traditional deterministic NF work from agentic overhead. The deterministic path performs the ordinary control-plane state changes. The agentic path adds Connection Agent processing, cached ARF/TRF metadata lookup, tool invocation wrappers, inter-agent messages, and accelerator-backed inference for intent-bearing requests. Roaming, AF-originated intent, and SRF routing cost are excluded.
 
@@ -20,7 +20,7 @@ The total control-plane request rate is:
 lambda_total [requests/s] = sum_i(lambda_i)
 ```
 
-The baseline uses `3,600,000 users` and `2 PDU sessions/user`. The PDU session count is retained as a scenario variable and does not multiply event rates automatically; session effects should be represented by changing the per-user/hour event frequencies.
+The baseline uses `3,600,000 users` and `2 PDU sessions/user`. The PDU session count is retained as a scenario variable and does not multiply event rates automatically; session effects are represented by changing the per-user/hour event frequencies.
 
 | Event | Default per user per hour | Derived request rate | Base latency | Base CPU | Base bandwidth |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -37,7 +37,7 @@ The baseline uses `3,600,000 users` and `2 PDU sessions/user`. The PDU session c
 
 The baseline total is `104,300 requests/s`. Any request type may carry intent, so the intent ratio is applied to the full control-plane request stream. At `100%` intent ratio, the total intent-bearing traffic is `104,300 requests/s`.
 
-## Resource Assumptions
+## Resource Parameters
 
 | Parameter | Value |
 | --- | ---: |
@@ -65,9 +65,9 @@ The baseline total is `104,300 requests/s`. Any request type may carry intent, s
 
 `CPU-ms` means one CPU core occupied for one millisecond. For example, `2 CPU-ms/request` at `100,000 requests/s` consumes `200 CPU cores`. In this version, CPU costs are interpreted as host-side budgets on Kunpeng 920 CPU cores. Qwen3-30B-A3B capacity is modeled in tokens/s, then converted into the number of production Ascend NPUs required. The default Qwen3 invocation ratio is `10%` of intent requests, and the model also reports `5%`, `10%`, `20%`, `50%`, and `100%` sensitivity points.
 
-## Qwen3 Token-Capacity Rationale
+## Qwen3 Capacity Reference
 
-[GPUStack's Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/) reports an optimized short-prompt result of `15,040.15 total tokens/s` for `128 input tokens` and `4 output tokens`. The [vLLM-Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/) includes Qwen3-30B-A3B guidance; for 32 GB NPU cards, the model uses tensor parallel size `4`, so one Qwen3 replica is treated as `4 NPUs`. The benchmark uses a specific software stack and should be treated as a reference point, not a measurement from this system.
+[GPUStack's Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/) reports an optimized short-prompt result of `15,040.15 total tokens/s` for `128 input tokens` and `4 output tokens`. The [vLLM-Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/) includes Qwen3-30B-A3B guidance; for 32 GB NPU cards, the model uses tensor parallel size `4`, so one Qwen3 replica is treated as `4 NPUs`. The benchmark is used as the external capacity reference for this analysis.
 
 The model uses a two-tier inference path. Lightweight parsing, constraint extraction, and tool selection are applied to all intent requests. Qwen3-30B-A3B is invoked only for complex or ambiguous intent requests:
 
@@ -96,13 +96,13 @@ R_Q = ceil(1,376,760 / (15,040 * 0.70)) = 131 replicas
 N_Q = 131 * 4 = 524 NPUs
 ```
 
-This framing avoids the unrealistic assumption that every intent request performs a full Qwen3 generation. Instead, the model separates total intent traffic from the subset that requires Qwen3.
+The model separates total intent traffic from the subset that requires Qwen3 generation.
 
-## Derivation of Agentic Cost Assumptions
+## Agentic Cost Model
 
-The proposal defines several architecture behaviors that create agentic overhead: UE NAS requests are forwarded to NW-Agents with or without intent; NW-Agents check whether the request can be fulfilled under network conditions and constraints; intent requests require understanding, task composition, tool selection, and tool invocation; the Planning Agent may interact with specialized agents such as the Connection Agent; and TRF/ARF provide tool or agent metadata for discovery and selection. In the basic-procedure model, TRF/ARF metadata is assumed to be cached in the serving agent process, so repository discovery does not add a per-request network round trip.
+The proposal defines several architecture behaviors that create agentic overhead: UE NAS requests are forwarded to NW-Agents with or without intent; NW-Agents check whether the request can be fulfilled under network conditions and constraints; intent requests require understanding, task composition, tool selection, and tool invocation; the Planning Agent may interact with specialized agents such as the Connection Agent; and TRF/ARF provide tool or agent metadata for discovery and selection. In the basic-procedure model, TRF/ARF metadata is modeled as cached in the serving agent process, so repository discovery does not add a per-request network round trip.
 
-The values below are therefore engineering budgets derived from the proposal procedure steps, not measured deployment constants. They should be interpreted as nominal assumptions that can be replaced by prototype measurements.
+The following CPU, latency, and bandwidth parameters are allocated according to the procedure decomposition in the proposal. These parameters are analytical inputs for capacity estimation and can be calibrated with measured deployment data.
 
 ### Non-Intent Agent CPU Cost
 
@@ -117,7 +117,7 @@ For a request without intent, the proposal still routes the request through an N
 | Tool wrapper, state update, and tracing | Prepare tool invocation context and record request state/progress. | 0.07 CPU-ms/request |
 | **Total** |  | **0.30 CPU-ms/request** |
 
-This is the incremental agentic CPU cost only. The deterministic registration, PDU session, service request, AN release, handover, and paging work is captured separately in the per-event base CPU values.
+The value represents incremental agentic CPU cost. Deterministic registration, PDU session, service request, AN release, handover, and paging work is captured separately in the per-event base CPU values.
 
 ### Intent Agent CPU Cost
 
@@ -218,13 +218,15 @@ Queueing delay uses a simple M/M/1-inspired sensitivity term:
 D_queue [ms] = S [ms] * u / (1 - u), for u < 1
 ```
 
-This is an analytical approximation, not a telecom simulator. Mean, p95, and p99 latency are calculated from deterministic procedure latency, fixed agent latency, CPU queueing, Qwen3 production-NPU queueing, and network queueing. The production sizing result reports how many NPUs are required to keep Qwen3 token utilization at or below the target.
+Queueing delay is represented by an analytical sensitivity approximation. Mean, p95, and p99 latency are calculated from deterministic procedure latency, fixed agent latency, CPU queueing, Qwen3 production-NPU queueing, and network queueing. The production sizing result reports how many NPUs are required to keep Qwen3 token utilization at or below the target.
 
 ## Analytical Results
 
 The table below fixes the user population and event frequencies, then varies only the percentage of all requests that carry intent.
 
-| Intent ratio | Total intent share | Intent rps | Qwen3 rps | Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | Qwen3 util | Required production NPUs | Network bandwidth | Mean latency | p95 latency | Status |
+For Qwen3, the primary scaling indicator is the required production NPU count. Qwen3 utilization is kept near the target by production sizing, so it should not be interpreted as fixed-pool pressure. The utilization figure therefore plots CPU and network utilization on the left axis, and required Qwen3 NPUs on the right axis.
+
+| Intent ratio | Total intent share | Intent rps | Qwen3 rps | Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | Sized Qwen3 util | Required production NPUs | Network bandwidth | Mean latency | p95 latency | Status |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 0% | 0.0% | 0 | 0 | 0 | 156.8 | 61.3% | 53.402 Gbps | 0.0% | 0 | 6.779 Gbps | 22.9 ms | 95.1 ms | stable |
 | 1% | 1.0% | 1,043 | 104 | 13,768 | 158.6 | 62.0% | 57.140 Gbps | 45.8% | 8 | 6.879 Gbps | 23.0 ms | 98.0 ms | stable |
@@ -253,8 +255,8 @@ Qwen3 production sizing at `100%` intent ratio with the optimized `15,040 tokens
 
 The event-rate model shows that high concurrency is dominated by frequent service request, AN release, handover, and paging events. If Qwen3 is used for `10%` of intent requests, the production model needs `131` replicas, or `524` NPUs, at `100%` intent traffic.
 
-The main conclusion is that total user/event load stresses deterministic CPU processing first, while increasing intent traffic increases CPU, memory traffic, bandwidth, and Qwen3 token demand. With production NPU sizing, the default `10%` Qwen3 invocation case requires `524` NPUs at `100%` intent traffic, but the full-load scenario is CPU-unstable unless more CPU capacity, lower intent ratio, faster CPU-side processing, or admission control is added.
+The analysis indicates that total user/event load stresses deterministic CPU processing first, while increasing intent traffic increases CPU, memory traffic, bandwidth, and Qwen3 token demand. With production NPU sizing, the default `10%` Qwen3 invocation case requires `524` NPUs at `100%` intent traffic, but the full-load scenario is CPU-unstable unless more CPU capacity, lower intent ratio, faster CPU-side processing, or admission control is added.
 
-## Limitations
+## Model Boundary
 
-All numerical values are analytical assumptions. Actual results depend on model size, batching behavior, inference hardware, NF implementation, database access latency, message encoding, tool granularity, and operator policy logic. The results should be presented as theoretical capacity and sensitivity analysis. A future prototype should replace the synthetic service-time assumptions with measured CPU time, inference latency, memory traffic, message size, and queueing behavior.
+The numerical values are analytical input parameters for capacity and sensitivity analysis. Actual deployment results depend on model size, batching behavior, inference hardware, NF implementation, database access latency, message encoding, tool granularity, and operator policy logic. Measured deployment data can be used to calibrate CPU time, inference latency, memory traffic, message size, and queueing behavior.

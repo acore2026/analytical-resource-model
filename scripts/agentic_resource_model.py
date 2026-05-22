@@ -299,17 +299,27 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
             values.append(None if math.isinf(value) else value)
         return values
 
-    plt.figure(figsize=(7, 4.2))
-    plt.plot(x, [float(r["cpu_utilization"]) * 100.0 for r in rows], marker="o", label="CPU")
-    plt.plot(x, [float(r["npu_utilization"]) * 100.0 for r in rows], marker="o", label="Qwen3 NPU")
-    plt.plot(x, [float(r["network_utilization"]) * 100.0 for r in rows], marker="o", label="Network")
-    plt.axhline(70, color="tab:orange", linestyle="--", linewidth=1, label="70% threshold")
-    plt.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
-    plt.xlabel("Intent ratio across all requests (%)")
-    plt.ylabel("Resource utilization (%)")
-    plt.title("Resource utilization vs. intent ratio")
-    plt.grid(True, alpha=0.3)
-    plt.legend()
+    fig, ax_util = plt.subplots(figsize=(7, 4.2))
+    ax_npu = ax_util.twinx()
+    cpu_line, = ax_util.plot(x, [float(r["cpu_utilization"]) * 100.0 for r in rows], marker="o", label="CPU util")
+    net_line, = ax_util.plot(x, [float(r["network_utilization"]) * 100.0 for r in rows], marker="o", label="Network util")
+    npu_line, = ax_npu.plot(
+        x,
+        [float(r["required_production_npus"]) for r in rows],
+        marker="o",
+        color="tab:orange",
+        label="Required Qwen3 NPUs",
+    )
+    ax_util.axhline(70, color="tab:gray", linestyle="--", linewidth=1, label="70% utilization")
+    ax_util.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
+    ax_util.set_xlabel("Intent ratio across all requests (%)")
+    ax_util.set_ylabel("CPU / Network utilization (%)")
+    ax_npu.set_ylabel("Required Qwen3 NPUs")
+    ax_util.set_title("Utilization and required Qwen3 NPUs vs. intent ratio")
+    ax_util.grid(True, alpha=0.3)
+    lines = [cpu_line, net_line, npu_line]
+    labels = [line.get_label() for line in lines]
+    ax_util.legend(lines, labels, loc="upper left")
     plt.tight_layout()
     plt.savefig(out_dir / "agentic_resource_utilization.png", dpi=180)
     plt.close()
