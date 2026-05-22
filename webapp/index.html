@@ -126,6 +126,10 @@
             <strong>Kunpeng 920 + 8x Ascend 910B4</strong>
             <small>vLLM Ascend 0.11.0 · Qwen3-30B-A3B</small>
           </div>
+          <p class="source-note">
+            <span data-i18n="qwen3SourceNote">Source: GPUStack reports 15,040 total tokens/s for Qwen3-30B-A3B short-prompt serving on Ascend 910B; vLLM-Ascend recommends TP >= 4 for 32 GB NPU cards.</span>
+            <a href="https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/" data-i18n="sourceLink">Benchmark</a>
+          </p>
 
           <div class="split-grid">
             <label class="field compact">
@@ -149,8 +153,28 @@
               <input id="npuHbmPerNpuGb" type="number" min="1" step="1" value="32">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="npuIntentCapacity">NPU capacity per NPU</span> <span class="unit">(intent/s/NPU)</span><span class="help" data-tip-key="npuIntentCapacityTip" data-tip="Assumed intent inference throughput per NPU. With 8 NPUs and 24,000 peak intent req/s, the 70% target requires about 4,286 intent/s/NPU.">?</span></span>
-              <input id="npuCapacityPerNpu" type="number" min="1" step="50" value="4300">
+              <span class="label-line"><span data-i18n="qwen3InvocationRatio">Qwen3 invocation ratio</span> <span class="unit">(%)</span><span class="help" data-tip-key="qwen3InvocationRatioTip" data-tip="Percentage of intent requests that need Qwen3-30B-A3B. The rest use lightweight intent parsing and tool selection.">?</span></span>
+              <input id="qwen3InvocationRatio" type="number" min="0" max="100" step="1" value="10">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="qwen3InputTokens">Qwen3 input tokens</span> <span class="unit">(tokens/request)</span><span class="help" data-tip-key="qwen3InputTokensTip" data-tip="Input tokens per complex intent request. The benchmark-derived default is 128.">?</span></span>
+              <input id="qwen3InputTokens" type="number" min="1" step="1" value="128">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="qwen3OutputTokens">Qwen3 output tokens</span> <span class="unit">(tokens/request)</span><span class="help" data-tip-key="qwen3OutputTokensTip" data-tip="Output tokens per complex intent request. The benchmark-derived default is 4.">?</span></span>
+              <input id="qwen3OutputTokens" type="number" min="1" step="1" value="4">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="qwen3TokenCapacity">Qwen3 capacity</span> <span class="unit">(tokens/s/replica)</span><span class="help" data-tip-key="qwen3TokenCapacityTip" data-tip="Reference Qwen3 serving capacity. GPUStack reports 15,040 total tokens/s for the optimized short-prompt Ascend 910B benchmark.">?</span></span>
+              <input id="qwen3TokenCapacity" type="number" min="1" step="100" value="15040">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="qwen3TensorParallel">Qwen3 tensor parallel</span> <span class="unit">(NPUs/replica)</span><span class="help" data-tip-key="qwen3TensorParallelTip" data-tip="NPUs required for one Qwen3 replica. vLLM-Ascend recommends TP >= 4 for 32 GB NPU cards.">?</span></span>
+              <input id="qwen3TensorParallel" type="number" min="1" step="1" value="4">
+            </label>
+            <label class="field compact">
+              <span class="label-line"><span data-i18n="qwen3TargetUtil">Qwen3 target utilization</span> <span class="unit">(%)</span><span class="help" data-tip-key="qwen3TargetUtilTip" data-tip="Production sizing target. Required NPUs are calculated so Qwen3 token utilization stays at or below this value.">?</span></span>
+              <input id="qwen3TargetUtil" type="number" min="1" max="100" step="1" value="70">
             </label>
           </div>
 
@@ -169,8 +193,8 @@
               <input id="intentCpu" type="number" min="0" step="0.1" value="2.0">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="intentInferenceLatency">Intent inference latency</span> <span class="unit">(ms/request)</span><span class="help" data-tip-key="intentInferenceLatencyTip" data-tip="Per-request NPU inference service time before queueing delay.">?</span></span>
-              <input id="intentNpuMs" type="number" min="0" step="0.5" value="8">
+              <span class="label-line"><span data-i18n="qwen3Latency">Qwen3 service time</span> <span class="unit">(ms/request)</span><span class="help" data-tip-key="qwen3LatencyTip" data-tip="Per-request Qwen3 service time for complex intents before queueing delay.">?</span></span>
+              <input id="qwen3LatencyMs" type="number" min="0" step="0.5" value="8">
             </label>
             <label class="field compact">
               <span class="label-line"><span data-i18n="intentExtraBandwidth">Intent extra bandwidth</span> <span class="unit">(KB/request)</span><span class="help" data-tip-key="intentExtraBandwidthTip" data-tip="Additional control-plane message bytes caused by agent-tool wrappers and inter-agent task messages.">?</span></span>
@@ -194,9 +218,14 @@
               <div class="bar"><i id="ramBar"></i></div>
             </article>
             <article class="metric">
-              <span data-i18n="npuLoadMetric">NPU load (%)</span>
+              <span data-i18n="qwen3LoadMetric">Qwen3 load (%)</span>
               <strong id="npuDemand">--</strong>
               <div class="bar"><i id="npuBar"></i></div>
+            </article>
+            <article class="metric">
+              <span data-i18n="productionNpuMetric">Production NPUs</span>
+              <strong id="prodNpuDemand">--</strong>
+              <div class="bar"><i id="prodNpuBar"></i></div>
             </article>
             <article class="metric">
               <span data-i18n="bandwidthMetric">Bandwidth (Gbps)</span>
@@ -222,7 +251,7 @@
               <span class="panel-code">05</span>
               <h2 data-i18n="intentSweep">Intent Sweep</h2>
             </div>
-            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share within eligible events. Y-axis: CPU, NPU, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.</p>
+            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share within eligible events. Y-axis: CPU, sized Qwen3, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.</p>
             <div class="chart-frame">
               <div class="axis-label y-axis" data-i18n="yAxisLabel">Resource utilization (%)</div>
               <canvas id="sweepChart" width="920" height="360" aria-label="Intent sweep chart"></canvas>
@@ -243,7 +272,8 @@
                     <th data-i18n="tableTotalIntent">Total intent (%)</th>
                     <th data-i18n="tableIntentRate">Intent rate (req/s)</th>
                     <th data-i18n="tableCpuUtil">CPU util (%)</th>
-                    <th data-i18n="tableNpuUtil">NPU util (%)</th>
+                    <th data-i18n="tableNpuUtil">Qwen3 util (%)</th>
+                    <th data-i18n="tableProdNpus">Prod NPUs</th>
                     <th data-i18n="tableBw">BW (Gbps)</th>
                     <th data-i18n="tableMean">Mean (ms)</th>
                     <th data-i18n="tableStatus">Status</th>

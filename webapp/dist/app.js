@@ -8,10 +8,15 @@ const BASELINE = {
     ramGb: 256,
     npuCount: 8,
     npuHbmPerNpuGb: 32,
-    npuCapacityPerNpu: 4300,
+    qwen3InvocationRatio: 10,
+    qwen3InputTokens: 128,
+    qwen3OutputTokens: 4,
+    qwen3TokenCapacity: 15040,
+    qwen3TensorParallel: 4,
+    qwen3TargetUtil: 70,
     nonIntentCpu: 0.3,
     intentCpu: 2.0,
-    intentNpuMs: 8,
+    qwen3LatencyMs: 8,
     intentBandwidthKb: 12
 };
 const EVENTS = [
@@ -36,10 +41,15 @@ const MODEL_INPUT_IDS = [
     "ramGb",
     "npuCount",
     "npuHbmPerNpuGb",
-    "npuCapacityPerNpu",
+    "qwen3InvocationRatio",
+    "qwen3InputTokens",
+    "qwen3OutputTokens",
+    "qwen3TokenCapacity",
+    "qwen3TensorParallel",
+    "qwen3TargetUtil",
     "nonIntentCpu",
     "intentCpu",
-    "intentNpuMs",
+    "qwen3LatencyMs",
     "intentBandwidthKb"
 ];
 const INPUT_IDS = [...MODEL_INPUT_IDS, ...EVENTS.map((event) => event.inputId)];
@@ -51,6 +61,8 @@ const I18N = {
         eventRates: "Event Rates",
         cluster: "Cluster",
         referenceProfile: "Reference profile",
+        qwen3SourceNote: "Source: GPUStack reports 15,040 total tokens/s for Qwen3-30B-A3B short-prompt serving on Ascend 910B; vLLM-Ascend recommends TP >= 4 for 32 GB NPU cards.",
+        sourceLink: "Benchmark",
         agentCost: "Agent Cost",
         userCount: "User count",
         pduSessionsPerUser: "PDU sessions per user",
@@ -77,30 +89,37 @@ const I18N = {
         ramCapacity: "RAM capacity",
         npuCount: "NPU count",
         hbmPerNpu: "HBM per NPU",
-        npuIntentCapacity: "NPU capacity per NPU",
+        qwen3InvocationRatio: "Qwen3 invocation ratio",
+        qwen3InputTokens: "Qwen3 input tokens",
+        qwen3OutputTokens: "Qwen3 output tokens",
+        qwen3TokenCapacity: "Qwen3 capacity",
+        qwen3TensorParallel: "Qwen3 tensor parallel",
+        qwen3TargetUtil: "Qwen3 target utilization",
         nonIntentCpuCost: "Non-intent CPU cost",
         intentCpuCost: "Intent CPU cost",
-        intentInferenceLatency: "Intent inference latency",
+        qwen3Latency: "Qwen3 service time",
         intentExtraBandwidth: "Intent extra bandwidth",
         resetBaseline: "Reset baseline",
         cpuDemandMetric: "CPU demand (cores)",
         memoryMetric: "Memory (GB)",
-        npuLoadMetric: "NPU load (%)",
+        qwen3LoadMetric: "Qwen3 load (%)",
+        productionNpuMetric: "Production NPUs",
         bandwidthMetric: "Bandwidth (Gbps)",
         meanLatencyMetric: "Mean latency (ms)",
         p95LatencyMetric: "p95 latency (ms)",
         p99LatencyMetric: "p99 latency (ms)",
         intentSweep: "Intent Sweep",
-        intentSweepDescription: "X-axis: intent-bearing share within eligible events. Y-axis: CPU, NPU, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.",
+        intentSweepDescription: "X-axis: intent-bearing share within eligible events. Y-axis: CPU, sized Qwen3, and network utilization. The total request rate is derived from users and event frequencies, so it stays fixed during this sweep.",
         xAxisLabel: "Eligible intent ratio (%)",
         yAxisLabel: "Resource utilization (%)",
-        intentSweepAria: "Line chart showing CPU, NPU, and network utilization by eligible intent ratio.",
+        intentSweepAria: "Line chart showing CPU, sized Qwen3, and network utilization by eligible intent ratio.",
         calculatedSweep: "Calculated Sweep",
         tableEligibleIntent: "Eligible intent (%)",
         tableTotalIntent: "Total intent (%)",
         tableIntentRate: "Intent rate (req/s)",
         tableCpuUtil: "CPU util (%)",
-        tableNpuUtil: "NPU util (%)",
+        tableNpuUtil: "Qwen3 util (%)",
+        tableProdNpus: "Prod NPUs",
         tableBw: "BW (Gbps)",
         tableMean: "Mean (ms)",
         tableStatus: "Status",
@@ -122,10 +141,15 @@ const I18N = {
         ramCapacityTip: "Host memory capacity for agent/NF processes, active request contexts, and runtime state.",
         npuCountTip: "Number of NPUs in the inference pool. The reference profile uses 8 Ascend 910B4 NPUs.",
         hbmPerNpuTip: "High-bandwidth memory available on each NPU. The reference profile uses 32 GB HBM per NPU.",
-        npuIntentCapacityTip: "Assumed intent inference throughput per NPU. With 8 NPUs and 24,000 peak intent req/s, the 70% target requires about 4,286 intent/s/NPU.",
+        qwen3InvocationRatioTip: "Percentage of intent requests that need Qwen3-30B-A3B. The rest use lightweight intent parsing and tool selection.",
+        qwen3InputTokensTip: "Input tokens per complex intent request. The benchmark-derived default is 128.",
+        qwen3OutputTokensTip: "Output tokens per complex intent request. The benchmark-derived default is 4.",
+        qwen3TokenCapacityTip: "Reference Qwen3 serving capacity. GPUStack reports 15,040 total tokens/s for the optimized short-prompt Ascend 910B benchmark.",
+        qwen3TensorParallelTip: "NPUs required for one Qwen3 replica. vLLM-Ascend recommends TP >= 4 for 32 GB NPU cards.",
+        qwen3TargetUtilTip: "Production sizing target. Required NPUs are calculated so Qwen3 token utilization stays at or below this value.",
         nonIntentCpuCostTip: "CPU-ms means one CPU core occupied for one millisecond. 0.3 CPU-ms is 0.3 ms on one core, or equivalent parallel CPU work.",
-        intentCpuCostTip: "CPU-side agent work for intent parsing, constraints, planning, and tool-wrapper handling outside NPU inference.",
-        intentInferenceLatencyTip: "Per-request Qwen3-30B-A3B NPU inference service time before queueing delay, served through vLLM Ascend 0.11.0.",
+        intentCpuCostTip: "CPU-side agent work for intent parsing, constraints, planning, and tool-wrapper handling outside Qwen3 inference.",
+        qwen3LatencyTip: "Per-request Qwen3 service time for complex intents before queueing delay, served through vLLM Ascend 0.11.0.",
         intentExtraBandwidthTip: "Additional control-plane message bytes caused by agent-tool wrappers and inter-agent task messages.",
         allRequests: "of all requests",
         totalTraffic: "Total traffic",
@@ -134,7 +158,7 @@ const I18N = {
         sessionsPerUser: "PDU sessions/user",
         bottleneck: "Bottleneck",
         intentTraffic: "Intent traffic is",
-        npu70: "keeping NPU utilization at or below 70% requires",
+        npu70: "production Qwen3 sizing requires",
         accelerator: "NPU",
         accelerators: "NPUs",
         stable: "stable",
@@ -142,9 +166,9 @@ const I18N = {
         high_risk: "high risk",
         unstable: "unstable",
         cpu: "CPU",
-        npu: "NPU",
+        npu: "Qwen3",
         network: "Network",
-        npuInference: "NPU inference",
+        npuInference: "Qwen3",
         ram: "RAM",
         coresUnit: "cores"
     },
@@ -155,6 +179,8 @@ const I18N = {
         eventRates: "事件速率",
         cluster: "集群",
         referenceProfile: "参考配置",
+        qwen3SourceNote: "来源：GPUStack 报告 Qwen3-30B-A3B 在 Ascend 910B 短提示服务下达到 15,040 total tokens/s；vLLM-Ascend 建议 32 GB NPU 卡使用 TP >= 4。",
+        sourceLink: "基准",
         agentCost: "Agent 成本",
         userCount: "用户数",
         pduSessionsPerUser: "每用户 PDU 会话数",
@@ -181,30 +207,37 @@ const I18N = {
         ramCapacity: "内存容量",
         npuCount: "NPU 数量",
         hbmPerNpu: "每 NPU HBM",
-        npuIntentCapacity: "单 NPU 推理能力",
+        qwen3InvocationRatio: "Qwen3 调用比例",
+        qwen3InputTokens: "Qwen3 输入 token",
+        qwen3OutputTokens: "Qwen3 输出 token",
+        qwen3TokenCapacity: "Qwen3 能力",
+        qwen3TensorParallel: "Qwen3 张量并行",
+        qwen3TargetUtil: "Qwen3 目标利用率",
         nonIntentCpuCost: "非意图 CPU 成本",
         intentCpuCost: "意图 CPU 成本",
-        intentInferenceLatency: "意图推理时延",
+        qwen3Latency: "Qwen3 服务时间",
         intentExtraBandwidth: "意图额外带宽",
         resetBaseline: "重置基线",
         cpuDemandMetric: "CPU 需求（核）",
         memoryMetric: "内存（GB）",
-        npuLoadMetric: "NPU 负载（%）",
+        qwen3LoadMetric: "Qwen3 负载（%）",
+        productionNpuMetric: "生产 NPU",
         bandwidthMetric: "带宽（Gbps）",
         meanLatencyMetric: "平均时延（ms）",
         p95LatencyMetric: "p95 时延（ms）",
         p99LatencyMetric: "p99 时延（ms）",
         intentSweep: "意图比例扫描",
-        intentSweepDescription: "横轴表示可携带意图事件中真正携带意图的比例。纵轴表示 CPU、NPU 和网络利用率。总请求速率由用户数和事件频率推导，因此在该扫描中保持不变。",
+        intentSweepDescription: "横轴表示可携带意图事件中真正携带意图的比例。纵轴表示 CPU、规划后的 Qwen3 和网络利用率。总请求速率由用户数和事件频率推导，因此在该扫描中保持不变。",
         xAxisLabel: "可携带意图比例（%）",
         yAxisLabel: "资源利用率（%）",
-        intentSweepAria: "折线图，展示不同可携带意图比例下的 CPU、NPU 和网络利用率。",
+        intentSweepAria: "折线图，展示不同可携带意图比例下的 CPU、规划后的 Qwen3 和网络利用率。",
         calculatedSweep: "计算结果扫描",
         tableEligibleIntent: "可携带意图比例（%）",
         tableTotalIntent: "总意图比例（%）",
         tableIntentRate: "意图速率（req/s）",
         tableCpuUtil: "CPU 利用率（%）",
-        tableNpuUtil: "NPU 利用率（%）",
+        tableNpuUtil: "Qwen3 利用率（%）",
+        tableProdNpus: "生产 NPU",
         tableBw: "带宽（Gbps）",
         tableMean: "平均值（ms）",
         tableStatus: "状态",
@@ -226,10 +259,15 @@ const I18N = {
         ramCapacityTip: "主机内存容量，用于 Agent/NF 进程、活跃请求上下文和运行状态。",
         npuCountTip: "推理池中的 NPU 数量。参考配置使用 8 张 Ascend 910B4 NPU。",
         hbmPerNpuTip: "每个 NPU 可用的高带宽内存。参考配置为每 NPU 32 GB HBM。",
-        npuIntentCapacityTip: "单个 NPU 的假设意图推理吞吐量。在 8 张 NPU 和 24,000 peak intent req/s 下，70% 利用率目标约需要 4,286 intent/s/NPU。",
+        qwen3InvocationRatioTip: "需要调用 Qwen3-30B-A3B 的意图请求比例。其他意图请求使用轻量意图解析和工具选择。",
+        qwen3InputTokensTip: "每个复杂意图请求的输入 token 数。基准默认值为 128。",
+        qwen3OutputTokensTip: "每个复杂意图请求的输出 token 数。基准默认值为 4。",
+        qwen3TokenCapacityTip: "参考 Qwen3 服务能力。GPUStack 在优化后的 Ascend 910B 短提示基准中报告 15,040 total tokens/s。",
+        qwen3TensorParallelTip: "一个 Qwen3 副本需要的 NPU 数。vLLM-Ascend 建议 32 GB NPU 卡使用 TP >= 4。",
+        qwen3TargetUtilTip: "生产规划目标。所需 NPU 数会按该目标计算，使 Qwen3 token 利用率不超过该值。",
         nonIntentCpuCostTip: "CPU-ms 表示一个 CPU 核占用一毫秒。0.3 CPU-ms 等价于单核 0.3 ms 的计算量。",
-        intentCpuCostTip: "意图解析、约束检查、规划和工具封装等 NPU 推理之外的 CPU 侧 Agent 工作量。",
-        intentInferenceLatencyTip: "通过 vLLM Ascend 0.11.0 服务 Qwen3-30B-A3B 时，不含排队延迟的单个意图请求 NPU 推理服务时间。",
+        intentCpuCostTip: "意图解析、约束检查、规划和工具封装等 Qwen3 推理之外的 CPU 侧 Agent 工作量。",
+        qwen3LatencyTip: "通过 vLLM Ascend 0.11.0 服务 Qwen3-30B-A3B 时，不含排队延迟的复杂意图请求服务时间。",
         intentExtraBandwidthTip: "由 Agent-Tool 封装和 Agent 间任务消息带来的额外控制面消息字节数。",
         allRequests: "占全部请求",
         totalTraffic: "总流量",
@@ -238,7 +276,7 @@ const I18N = {
         sessionsPerUser: "PDU 会话/用户",
         bottleneck: "瓶颈",
         intentTraffic: "意图流量为",
-        npu70: "若保持 NPU 利用率不超过 70%，需要",
+        npu70: "生产 Qwen3 规划需要",
         accelerator: "个 NPU",
         accelerators: "个 NPU",
         stable: "稳定",
@@ -246,9 +284,9 @@ const I18N = {
         high_risk: "高风险",
         unstable: "不稳定",
         cpu: "CPU",
-        npu: "NPU",
+        npu: "Qwen3",
         network: "网络",
-        npuInference: "NPU 推理",
+        npuInference: "Qwen3",
         ram: "内存",
         coresUnit: "核"
     }
@@ -345,15 +383,28 @@ function evaluate(intentRatioPercent = num("intentRatio")) {
     const networkUtil = networkGbps / Math.max(1, num("nicGbps"));
     const networkDelay = queueDelayMs(networkUtil, 0.1);
     const npuCount = Math.max(0, num("npuCount"));
-    const npuCapacityPerNpu = Math.max(1, num("npuCapacityPerNpu"));
-    const npuTotalCapacity = npuCount * npuCapacityPerNpu;
-    const npuUtil = npuTotalCapacity > 0 ? intentRps / npuTotalCapacity : Infinity;
-    const npuQueueDelay = queueDelayMs(npuUtil, 1000 / Math.max(1, npuTotalCapacity));
-    const intentNpuLatency = Math.max(0, num("intentNpuMs")) + npuQueueDelay;
-    const activeIntentRequests = intentRps * Math.max(0, num("intentNpuMs")) / 1000;
-    const activeNpuCount = intentRps > 0 ? Math.min(npuCount, Math.ceil(intentRps / npuCapacityPerNpu)) : 0;
-    const npuHbmGb = intentRps > 0 ? activeNpuCount * 16 + activeIntentRequests * 4 / 1024 : 0;
-    const npuHbmUtil = npuHbmGb / Math.max(1, npuCount * Math.max(1, num("npuHbmPerNpuGb")));
+    const qwen3InvocationRatio = clamp(num("qwen3InvocationRatio") / 100, 0, 1);
+    const qwen3InputTokens = Math.max(1, num("qwen3InputTokens"));
+    const qwen3OutputTokens = Math.max(1, num("qwen3OutputTokens"));
+    const qwen3TokensPerRequest = qwen3InputTokens + qwen3OutputTokens;
+    const qwen3TokenCapacity = Math.max(1, num("qwen3TokenCapacity"));
+    const qwen3TensorParallel = Math.max(1, num("qwen3TensorParallel"));
+    const qwen3TargetUtil = clamp(num("qwen3TargetUtil") / 100, 0.01, 1);
+    const qwen3RequestRps = intentRps * qwen3InvocationRatio;
+    const qwen3TokenDemand = qwen3RequestRps * qwen3TokensPerRequest;
+    const labReplicas = Math.floor(npuCount / qwen3TensorParallel);
+    const qwen3LabCapacity = labReplicas * qwen3TokenCapacity;
+    const qwen3LabUtil = qwen3LabCapacity > 0 ? qwen3TokenDemand / qwen3LabCapacity : Infinity;
+    const requiredQwen3Replicas = qwen3TokenDemand > 0 ? Math.ceil(qwen3TokenDemand / (qwen3TokenCapacity * qwen3TargetUtil)) : 0;
+    const requiredProductionNpus = requiredQwen3Replicas * Math.ceil(qwen3TensorParallel);
+    const productionCapacity = requiredQwen3Replicas * qwen3TokenCapacity;
+    const npuUtil = productionCapacity > 0 ? qwen3TokenDemand / productionCapacity : 0;
+    const npuQueueDelay = productionCapacity > 0 ? queueDelayMs(npuUtil, 1000 / productionCapacity) : 0;
+    const qwen3Latency = Math.max(0, num("qwen3LatencyMs")) + npuQueueDelay;
+    const activeQwen3Requests = qwen3RequestRps * Math.max(0, num("qwen3LatencyMs")) / 1000;
+    const npuHbmGb = qwen3RequestRps > 0 ? requiredProductionNpus * 16 + activeQwen3Requests * 4 / 1024 : 0;
+    const productionHbmGb = requiredProductionNpus * Math.max(1, num("npuHbmPerNpuGb"));
+    const npuHbmUtil = productionHbmGb > 0 ? npuHbmGb / productionHbmGb : 0;
     const activeRequests = totalRps * baseLatencyAvg / 1000;
     const ramGb = 32 + activeRequests * 128 / 1024 / 1024;
     const ramUtil = ramGb / Math.max(1, num("ramGb"));
@@ -364,7 +415,12 @@ function evaluate(intentRatioPercent = num("intentRatio")) {
         const eventShare = totalRps > 0 ? event.rps / totalRps : 0;
         const eventIntentShare = event.intentEligible ? intentRatio : 0;
         const nonIntentLatency = event.baseLatencyMs + 1 + cpuDelay + networkDelay;
-        const intentLatency = event.baseLatencyMs + 4 + Math.max(0, num("intentCpu")) + intentNpuLatency + cpuDelay + networkDelay;
+        const intentLatency = event.baseLatencyMs
+            + 4
+            + Math.max(0, num("intentCpu"))
+            + qwen3InvocationRatio * qwen3Latency
+            + cpuDelay
+            + networkDelay;
         meanLatency += eventShare * ((1 - eventIntentShare) * nonIntentLatency + eventIntentShare * intentLatency);
     }
     const bottleneckUtil = Math.max(cpuUtil, npuUtil, networkUtil);
@@ -380,7 +436,6 @@ function evaluate(intentRatioPercent = num("intentRatio")) {
         meanLatency = Infinity;
     }
     const systemStatus = unstable ? "unstable" : classifyStatus(bottleneckUtil);
-    const requiredNpus70 = intentRps > 0 ? Math.ceil(intentRps / (npuCapacityPerNpu * 0.7)) : 0;
     return {
         totalRps,
         eligibleRps,
@@ -394,9 +449,13 @@ function evaluate(intentRatioPercent = num("intentRatio")) {
         ramUtil,
         memoryTrafficGbps,
         npuUtil,
+        qwen3RequestRps,
+        qwen3TokenDemand,
+        qwen3LabUtil,
+        requiredQwen3Replicas,
+        requiredProductionNpus,
         npuHbmGb,
         npuHbmUtil,
-        requiredNpus70,
         networkGbps,
         networkUtil,
         meanLatency,
@@ -450,10 +509,12 @@ function updateSummary(result) {
     mustGet("cpuDemand").textContent = `${fmt(result.cpuCoreDemand, 1)} ${t("coresUnit")}`;
     mustGet("ramDemand").textContent = `${fmt(result.ramGb, 1)} GB`;
     mustGet("npuDemand").textContent = pct(result.npuUtil);
+    mustGet("prodNpuDemand").textContent = fmt(result.requiredProductionNpus, 0);
     mustGet("netDemand").textContent = `${fmt(result.networkGbps, 3)} Gbps`;
     setBar("cpuBar", result.cpuUtil, result.cpuStatus);
     setBar("ramBar", result.ramUtil, classifyStatus(result.ramUtil));
     setBar("npuBar", result.npuUtil, result.npuStatus);
+    setBar("prodNpuBar", result.requiredProductionNpus / Math.max(1, result.requiredProductionNpus), result.npuStatus);
     setBar("netBar", result.networkUtil, result.netStatus);
     mustGet("meanLatency").textContent = `${fmt(result.meanLatency, 1)} ms`;
     mustGet("p95Latency").textContent = `${fmt(result.p95Latency, 1)} ms`;
@@ -463,11 +524,11 @@ function updateSummary(result) {
     stateDot.style.background = colorForStatus(result.systemStatus);
     stateDot.style.boxShadow = `0 0 20px ${colorForStatus(result.systemStatus)}`;
     stateText.textContent = statusText(result.systemStatus);
-    const npus = result.requiredNpus70;
+    const npus = result.requiredProductionNpus;
     const acceleratorLabel = currentLang === "zh"
         ? t("accelerator")
         : (npus === 1 ? t("accelerator") : t("accelerators"));
-    mustGet("bottleneckNote").textContent = `${t("bottleneck")}: ${bottleneckLabel(result)}. ${t("intentTraffic")} ${fmt(result.intentRps, 0)} req/s; ${t("npu70")} ${npus} ${acceleratorLabel}.`;
+    mustGet("bottleneckNote").textContent = `${t("bottleneck")}: ${bottleneckLabel(result)}. ${t("intentTraffic")} ${fmt(result.intentRps, 0)} req/s; Qwen3 ${fmt(result.qwen3RequestRps, 0)} req/s / ${fmt(result.qwen3TokenDemand, 0)} tokens/s; ${t("npu70")} ${npus} ${acceleratorLabel}.`;
     updateEventTable(result);
 }
 function updateTable(rows) {
@@ -479,6 +540,7 @@ function updateTable(rows) {
       <td>${fmt(row.intentRps, 0)}</td>
       <td>${pct(row.cpuUtil)}</td>
       <td>${pct(row.npuUtil)}</td>
+      <td>${fmt(row.requiredProductionNpus, 0)}</td>
       <td>${fmt(row.networkGbps, 3)} Gbps</td>
       <td>${fmt(row.meanLatency, 1)} ms</td>
       <td class="status-${row.systemStatus}">${statusText(row.systemStatus)}</td>

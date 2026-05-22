@@ -404,6 +404,19 @@ input[type="range"] {
   font-size: 12px;
 }
 
+.source-note {
+  margin: -6px 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.source-note a {
+  color: var(--accent);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .event-summary {
   margin-top: 10px;
   padding-top: 12px;
@@ -455,7 +468,7 @@ input[type="range"] {
 
 .metric-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1px;
   background: var(--line);
   border: 1px solid var(--line);
@@ -614,7 +627,7 @@ canvas {
 
 table {
   width: 100%;
-  min-width: 820px;
+  min-width: 920px;
   border-collapse: collapse;
   font-size: 13px;
 }

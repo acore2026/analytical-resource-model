@@ -46,62 +46,62 @@ The baseline total is `104,300 requests/s`. Intent is only applied to initial PD
 | RAM capacity | 256 GB |
 | Inference runtime | vLLM Ascend 0.11.0 |
 | Intent inference model | Qwen3-30B-A3B |
-| NPU count | 8 NPUs |
-| NPU capacity | 4,300 intent inferences/s/NPU |
-| Total NPU inference capacity | 34,400 intent inferences/s |
-| HBM capacity | 32 GB/NPU, 256 GB total |
+| Lab NPU profile | 8 x Ascend 910B4, 32 GB HBM/NPU |
+| Production NPU sizing target | 70% Qwen3 token utilization |
+| Qwen3 invocation ratio | 10% of intent requests |
+| Qwen3 token profile | 128 input tokens + 4 output tokens = 132 tokens/request |
+| Qwen3 token capacity | 15,040 tokens/s/replica |
+| Qwen3 tensor parallel size | 4 NPUs/replica |
 | Network capacity | 100 Gbps |
 | Non-intent agent CPU cost | 0.3 CPU-ms/request |
 | Intent agent CPU cost | 2.0 CPU-ms/request |
 | Non-intent agent latency | 1 ms/request |
 | Intent fixed agent latency | 4 ms/request |
-| Intent NPU inference service time | 8 ms/request |
+| Qwen3 service time for complex intent | 8 ms/request before queueing |
 | Non-intent memory traffic | 64 KB/request |
 | Intent memory traffic | 512 KB/request |
 | Intent extra bandwidth | 12 KB/request |
 | Fixed inference model memory | 16 GB HBM per active NPU |
-| Active intent HBM | 4 MB/active intent request |
+| Active Qwen3 HBM | 4 MB/active Qwen3 request |
 
-`CPU-ms` means one CPU core occupied for one millisecond. For example, `2 CPU-ms/request` at `100,000 requests/s` consumes `200 CPU cores`. In this version, CPU costs are interpreted as host-side budgets on Kunpeng 920 CPU cores, while NPU inference latency and capacity are interpreted for Qwen3-30B-A3B served through vLLM Ascend 0.11.0 on the Ascend 910B4 NPU pool.
+`CPU-ms` means one CPU core occupied for one millisecond. For example, `2 CPU-ms/request` at `100,000 requests/s` consumes `200 CPU cores`. In this version, CPU costs are interpreted as host-side budgets on Kunpeng 920 CPU cores. Qwen3-30B-A3B capacity is modeled in tokens/s, then converted into the number of production Ascend 910B4 NPUs required.
 
-The NPU reference profile is based on an available `8 x Ascend 910B4` deployment with `32 GB HBM/NPU`. The `4,300 intent inferences/s/NPU` capacity is not a measured 910B4 result. It is the analytical threshold needed for this workload: at the peak modeled intent rate of `24,000 requests/s`, eight NPUs must each sustain about `24,000 / (8 * 0.70) = 4,286 intent inferences/s/NPU` to keep NPU utilization at or below 70%. The model therefore treats per-NPU capacity as a tunable assumption and reports a sensitivity sweep.
+The `8 x Ascend 910B4` server is treated as a lab reference, not as the production deployment size for `3.6M` users. Production NPU count is an output of the model. The default Qwen3 invocation ratio is `10%` of intent requests, and the model also reports `5%`, `10%`, `20%`, `50%`, and `100%` sensitivity points.
 
-## Ascend 910B4 NPU Capacity Rationale
+## Qwen3 Token-Capacity Rationale
 
-The available `npu-smi` snapshot establishes the deployment shape used by the model: eight `910B4` NPUs are visible and each card reports `32,768 MB` of HBM capacity. The concrete inference stack is vLLM Ascend 0.11.0 serving Qwen3-30B-A3B, with Kunpeng 920 CPUs handling host-side runtime and agent logic. This is useful for sizing CPU/NPU/HBM headroom, but it is not enough to derive per-request serving throughput because the snapshot does not include prompt length, output length, batch size, scheduler policy, or end-to-end inference latency under load.
+The available `npu-smi` snapshot establishes the lab shape used by the model: eight `910B4` NPUs are visible and each card reports `32,768 MB` of HBM capacity. The concrete inference stack is vLLM Ascend 0.11.0 serving Qwen3-30B-A3B, with Kunpeng 920 CPUs handling host-side runtime and agent logic. This is useful for defining the reference platform, but it should not be interpreted as enough capacity for the full production workload.
 
-Public material on Ascend hardware is still fragmented by variant and system vendor. Third-party specification summaries commonly place Ascend 910B-class FP16 peak compute around `320 TFLOPS`, while [Huawei's CANN documentation](https://www.hiascend.com/document/detail/en/canncommercial/800/opdevg/Ascendcopdevg/atlas_ascendc_10_0009.html) describes the Ascend AI Core compute units as Cube, Vector, and Scalar units, and [public 910B specification summaries](https://chip.computer/chips/huawei/ascend-910b) provide a useful but non-authoritative peak-compute reference. The Cube unit is the matrix engine that matters most for transformer-style inference, while the Vector and Scalar units handle non-matrix operations and control work. These facts support using the 910B4 as an accelerator-backed inference resource, but they do not directly determine `intent inferences/s/NPU`.
+[GPUStack's Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/) reports an optimized short-prompt result of `15,040.15 total tokens/s` for `128 input tokens` and `4 output tokens`. [vLLM-Ascend's Qwen3-30B-A3B tutorial](https://docs.vllm.ai/projects/ascend/en/v0.11.0-dev/tutorials/multi_npu_qwen3_moe.html) states that 32 GB NPU cards should use tensor parallel size at least `4`, so the model treats one Qwen3 replica as `4 NPUs`. The benchmark uses a specific software stack and should be treated as a reference point, not a measurement from this system.
 
-For paper modeling, the per-NPU capacity should therefore be derived as an explicit analytical assumption:
-
-```text
-effective_npu_flops [FLOP/s] =
-  peak_npu_flops [FLOP/s] * efficiency [unitless]
-
-flops_per_intent [FLOP/request] ~=
-  2 * active_model_parameters [parameters] * processed_tokens [tokens/request]
-
-npu_capacity [requests/s/NPU] =
-  effective_npu_flops [FLOP/s] / flops_per_intent [FLOP/request]
-```
-
-The selected default, `4,300 intent inferences/s/NPU`, is best read as the capacity target required by the scenario:
+The model uses a two-tier inference path. Lightweight parsing, constraint extraction, and tool selection are applied to all intent requests. Qwen3-30B-A3B is invoked only for complex or ambiguous intent requests:
 
 ```text
-required_capacity_per_npu [requests/s/NPU] =
-  24,000 [requests/s] / (8 [NPUs] * 0.70) =
-  4,286 requests/s/NPU
+lambda_Q [requests/s] =
+  lambda_I [intent requests/s] * r_Q [Qwen3 invocation ratio]
+
+T_Q [tokens/s] =
+  lambda_Q * (tokens_input + tokens_output)
+
+R_Q [replicas] =
+  ceil(T_Q / (capacity_tokens_per_replica * target_utilization))
+
+N_Q [NPUs] =
+  R_Q * tensor_parallel_size
 ```
 
-Equivalently, if a 910B4 were budgeted at `320 TFLOP/s` peak FP16, the maximum compute budget at the 70% utilization target would be approximately:
+For the default production scenario at `100%` eligible intent:
 
 ```text
-max_flops_per_request_at_70pct =
-  320e12 [FLOP/s] * 0.70 / 4,286 [requests/s] =
-  52e9 FLOP/request
+lambda_I = 24,000 intent requests/s
+r_Q = 10%
+lambda_Q = 2,400 Qwen3 requests/s
+T_Q = 2,400 * 132 = 316,800 tokens/s
+R_Q = ceil(316,800 / (15,040 * 0.70)) = 31 replicas
+N_Q = 31 * 4 = 124 NPUs
 ```
 
-At `30%` effective serving efficiency, this falls to about `16e9 FLOP/request`. For Qwen3-30B-A3B, the formula should use the active parameters and the actual processed-token count for the intended prompt template, not only the model name. This range is plausible for lightweight intent classification, constrained intent parsing, short-output plan selection, cached tool selection, or batched short-output inference. It is not a safe assumption for full LLM generation on every request. Therefore, the model keeps NPU capacity configurable and includes `2,000`, `3,000`, `4,300`, `5,000`, and `8,000 intent/s/NPU` sensitivity points.
+This framing avoids the unrealistic assumption that every intent request performs a full Qwen3 generation on the 8-NPU lab server.
 
 ## Derivation of Agentic Cost Assumptions
 
@@ -141,17 +141,18 @@ For intent-bearing requests, the proposal adds semi-structured intent processing
 
 ### Intent Latency
 
-Latency is split into deterministic procedure latency, CPU queueing, fixed agent orchestration latency, and NPU inference latency. The intent path uses the following pre-queue service-time budget:
+Latency is split into deterministic procedure latency, CPU queueing, fixed agent orchestration latency, and optional Qwen3 inference latency. The lightweight intent path uses fixed orchestration and CPU-side agent work. A configurable fraction of intent requests also invokes Qwen3:
 
 ```text
-Intent agent latency [ms/request] =
+Lightweight intent latency [ms/request] =
   4 ms fixed orchestration
 + 2 ms CPU-side agent service
-+ 8 ms NPU inference service
-= 14 ms/request before queueing
+
+Complex intent Qwen3 add-on [ms/request] =
+  8 ms Qwen3 service time before queueing
 ```
 
-The `4 ms` fixed orchestration term covers wall-clock processing around parsing, feasibility checking, task-plan construction, tool wrapper creation, and local state update. The `2 ms` CPU-side service term corresponds to the `2.0 CPU-ms/request` intent CPU budget when it is serialized on one core. The `8 ms` NPU term represents nominal model inference service time for intent understanding and plan generation. Queueing delay is then added based on CPU/NPU/network utilization.
+The `4 ms` fixed orchestration term covers wall-clock processing around parsing, feasibility checking, task-plan construction, tool wrapper creation, and local state update. The `2 ms` CPU-side service term corresponds to the `2.0 CPU-ms/request` intent CPU budget when it is serialized on one core. The `8 ms` Qwen3 term applies only to the configured complex-intent share. Queueing delay is then added based on CPU, sized Qwen3 production-NPU, and network utilization.
 
 For non-intent requests, the model uses `1 ms/request` of fixed agent latency because the request follows a fast path: classify, check cached metadata, and invoke the deterministic tool path without semantic inference.
 
@@ -206,11 +207,14 @@ B_net [Gbps] = lambda_total * B_req * 8 / 1,000,000
 u_net [unitless] = B_net / C_net
 ```
 
-NPU utilization is:
+Qwen3 production NPU sizing is:
 
 ```text
-u_npu [unitless] = lambda_I / (N_npu * mu_npu)
-N_npu,70 [NPUs] = ceil(lambda_I / (0.7 * mu_npu))
+lambda_Q [requests/s] = lambda_I * r_Q
+T_Q [tokens/s] = lambda_Q * L_Q
+R_Q [replicas] = ceil(T_Q / (mu_Q * u_target))
+N_Q [NPUs] = R_Q * TP_Q
+u_npu [unitless] = T_Q / (R_Q * mu_Q)
 ```
 
 Queueing delay uses a simple M/M/1-inspired sensitivity term:
@@ -219,42 +223,42 @@ Queueing delay uses a simple M/M/1-inspired sensitivity term:
 D_queue [ms] = S [ms] * u / (1 - u), for u < 1
 ```
 
-This is an analytical approximation, not a telecom simulator. Mean, p95, and p99 latency are calculated from deterministic procedure latency, fixed agent latency, CPU queueing, NPU inference queueing, and network queueing. A resource is unstable when utilization is at or above 100%.
+This is an analytical approximation, not a telecom simulator. Mean, p95, and p99 latency are calculated from deterministic procedure latency, fixed agent latency, CPU queueing, Qwen3 production-NPU queueing, and network queueing. A fixed lab NPU pool may be over capacity, but the production sizing result reports how many NPUs are required to keep Qwen3 token utilization at or below the target.
 
 ## Analytical Results
 
 The table below fixes the user population and event frequencies, then varies only the percentage of intent among intent-eligible events.
 
-| Eligible intent ratio | Total intent share | Intent rps | CPU cores | CPU util | Memory traffic | NPU util | NPUs for <=70% | Network bandwidth | Mean latency | p95 latency | Status |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 0% | 0.0% | 0 | 156.8 | 61.3% | 53.402 Gbps | 0.0% | 0 | 6.779 Gbps | 22.9 ms | 95.1 ms | stable |
-| 1% | 0.2% | 240 | 157.2 | 61.4% | 54.262 Gbps | 0.7% | 1 | 6.802 Gbps | 22.9 ms | 95.8 ms | stable |
-| 5% | 1.2% | 1,200 | 158.9 | 62.1% | 57.702 Gbps | 3.5% | 1 | 6.894 Gbps | 23.1 ms | 98.7 ms | stable |
-| 10% | 2.3% | 2,400 | 160.9 | 62.9% | 62.003 Gbps | 7.0% | 1 | 7.010 Gbps | 23.4 ms | 102.5 ms | stable |
-| 20% | 4.6% | 4,800 | 165.0 | 64.4% | 70.605 Gbps | 14.0% | 2 | 7.240 Gbps | 23.9 ms | 110.8 ms | stable |
-| 50% | 11.5% | 12,000 | 177.2 | 69.2% | 96.410 Gbps | 34.9% | 4 | 7.931 Gbps | 25.8 ms | 141.9 ms | stable |
-| 100% | 23.0% | 24,000 | 197.6 | 77.2% | 139.418 Gbps | 69.8% | 8 | 9.083 Gbps | 29.9 ms | 232.4 ms | degraded |
+| Eligible intent ratio | Total intent share | Intent rps | Qwen3 rps | Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | Qwen3 util | Required production NPUs | Network bandwidth | Mean latency | p95 latency | Status |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 0% | 0.0% | 0 | 0 | 0 | 156.8 | 61.3% | 53.402 Gbps | 0.0% | 0 | 6.779 Gbps | 22.9 ms | 95.1 ms | stable |
+| 1% | 0.2% | 240 | 24 | 3,168 | 157.2 | 61.4% | 54.262 Gbps | 21.1% | 4 | 6.802 Gbps | 22.9 ms | 95.8 ms | stable |
+| 5% | 1.2% | 1,200 | 120 | 15,840 | 158.9 | 62.1% | 57.702 Gbps | 52.7% | 8 | 6.894 Gbps | 23.0 ms | 98.4 ms | stable |
+| 10% | 2.3% | 2,400 | 240 | 31,680 | 160.9 | 62.9% | 62.003 Gbps | 52.7% | 16 | 7.010 Gbps | 23.2 ms | 101.8 ms | stable |
+| 20% | 4.6% | 4,800 | 480 | 63,360 | 165.0 | 64.4% | 70.605 Gbps | 60.2% | 28 | 7.240 Gbps | 23.6 ms | 109.2 ms | stable |
+| 50% | 11.5% | 12,000 | 1,200 | 158,400 | 177.2 | 69.2% | 96.410 Gbps | 65.8% | 64 | 7.931 Gbps | 25.0 ms | 137.3 ms | stable |
+| 100% | 23.0% | 24,000 | 2,400 | 316,800 | 197.6 | 77.2% | 139.418 Gbps | 67.9% | 124 | 9.083 Gbps | 28.2 ms | 219.4 ms | degraded |
 
-Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`. The NPU capacity sensitivity sweep is available in `outputs/agentic_npu_capacity_sensitivity.csv`.
+Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`. The Qwen3 sizing sensitivity sweep is available in `outputs/agentic_qwen3_sizing_sensitivity.csv`.
 
-NPU capacity sensitivity at `100%` eligible intent:
+Qwen3 production sizing at `100%` eligible intent with the optimized `15,040 tokens/s/replica` reference:
 
-| Capacity per NPU | Total NPU capacity | NPU util | NPUs for <=70% | Mean latency | System status |
-| ---: | ---: | ---: | ---: | ---: | --- |
-| 2,000 intent/s/NPU | 16,000 intent/s | 150.0% | 18 | unstable | unstable |
-| 3,000 intent/s/NPU | 24,000 intent/s | 100.0% | 12 | unstable | unstable |
-| 4,300 intent/s/NPU | 34,400 intent/s | 69.8% | 8 | 29.9 ms | degraded |
-| 5,000 intent/s/NPU | 40,000 intent/s | 60.0% | 7 | 29.9 ms | degraded |
-| 8,000 intent/s/NPU | 64,000 intent/s | 37.5% | 5 | 29.9 ms | degraded |
+| Qwen3 invocation ratio | Qwen3 rps | Token demand | Required replicas | Required NPUs | Sized Qwen3 util | 8-NPU lab util |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 5% | 1,200 | 158,400 tokens/s | 16 | 64 | 65.8% | 526.6% |
+| 10% | 2,400 | 316,800 tokens/s | 31 | 124 | 67.9% | 1,053.2% |
+| 20% | 4,800 | 633,600 tokens/s | 61 | 244 | 69.1% | 2,106.4% |
+| 50% | 12,000 | 1,584,000 tokens/s | 151 | 604 | 69.7% | 5,266.0% |
+| 100% | 24,000 | 3,168,000 tokens/s | 301 | 1,204 | 70.0% | 10,531.9% |
 
 ![](outputs/agentic_resource_utilization.png)
 ![](outputs/agentic_latency.png)
 
 ## Interpretation
 
-The event-rate model shows that high concurrency is dominated by frequent service request, AN release, handover, and paging events. With the provisioned 256-core CPU cluster and `8 x 910B4` NPU inference pool, the system remains stable across the full intent sweep if each NPU sustains the assumed `4,300 intent inferences/s/NPU`. At `100%` eligible-intent traffic, the model becomes CPU-degraded but not unstable: CPU utilization is `77.2%`, NPU utilization is `69.8%`, and control-plane bandwidth is `9.083 Gbps`.
+The event-rate model shows that high concurrency is dominated by frequent service request, AN release, handover, and paging events. The `8 x 910B4` lab server is not large enough for the default `3.6M`-user production scenario if Qwen3 is used for `10%` of intent requests. It provides only two Qwen3 replicas at tensor parallel size `4`, while the production model needs `31` replicas, or `124` NPUs, at `100%` eligible-intent traffic.
 
-The main conclusion is that total user/event load stresses deterministic CPU processing first, while increasing the intent ratio primarily increases NPU utilization, HBM use, memory traffic, and tail latency. The 8-NPU deployment is sufficient for the peak modeled intent load only if measured per-NPU service rate is at least about `4.3k intent inferences/s/NPU` for the selected model, prompt size, batching policy, and concurrency target. If measured throughput is closer to `2k` or `3k intent inferences/s/NPU`, NPU inference becomes unstable at high intent ratios and the deployment requires more NPUs, a smaller model, stronger batching, caching, or admission control.
+The main conclusion is that total user/event load stresses deterministic CPU processing first, while increasing intent traffic increases CPU, memory traffic, bandwidth, and Qwen3 token demand. With production NPU sizing, the default `10%` Qwen3 invocation case requires `124` NPUs and remains CPU-degraded but not Qwen3-unstable: CPU utilization is `77.2%`, sized Qwen3 utilization is `67.9%`, and control-plane bandwidth is `9.083 Gbps`.
 
 ## Limitations
 

@@ -34,7 +34,6 @@ class ModelConfig:
     ram_gb: float = 256.0
     npu_count: float = 8.0
     npu_hbm_per_npu_gb: float = 32.0
-    npu_capacity_per_npu_rps: float = 4_300.0
     cpu_degraded_util: float = 0.70
     cpu_high_risk_util: float = 0.85
     npu_degraded_util: float = 0.70
@@ -48,8 +47,14 @@ class ModelConfig:
     intent_agent_fixed_latency_ms: float = 4.0
     intent_agent_bandwidth_kb: float = 12.0
     intent_mem_traffic_kb: float = 512.0
-    intent_npu_latency_ms: float = 8.0
-    intent_npu_active_hbm_mb: float = 4.0
+    qwen3_invocation_ratio: float = 0.10
+    qwen3_input_tokens_per_request: float = 128.0
+    qwen3_output_tokens_per_request: float = 4.0
+    qwen3_token_capacity_per_replica: float = 15_040.0
+    qwen3_tensor_parallel_size: float = 4.0
+    qwen3_target_util: float = 0.70
+    qwen3_latency_ms: float = 8.0
+    qwen3_active_hbm_mb: float = 4.0
     active_context_ram_kb: float = 128.0
 
 
@@ -68,7 +73,8 @@ EVENTS: List[EventType] = [
 
 INTENT_SETTINGS = [0.00, 0.01, 0.05, 0.10, 0.20, 0.50, 1.00]
 SENSITIVITY_USERS = [100_000.0, 1_000_000.0, 3_600_000.0, 10_000_000.0]
-SENSITIVITY_NPU_CAPACITIES = [2_000.0, 3_000.0, 4_300.0, 5_000.0, 8_000.0]
+QWEN3_INVOCATION_SETTINGS = [0.05, 0.10, 0.20, 0.50, 1.00]
+QWEN3_TOKEN_CAPACITY_SETTINGS = [4_712.0, 5_340.0, 15_040.0]
 
 
 def event_rps(config: ModelConfig, event: EventType) -> float:
@@ -116,8 +122,31 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
     intent_eligible_rps = sum(event_rps(config, event) for event in EVENTS if event.intent_eligible)
     intent_rps = intent_eligible_rps * eligible_intent_ratio
     actual_intent_share = intent_rps / rps_total if rps_total > 0 else 0.0
-    npu_total_capacity_rps = config.npu_count * config.npu_capacity_per_npu_rps
     npu_total_hbm_gb = config.npu_count * config.npu_hbm_per_npu_gb
+    qwen3_tokens_per_request = (
+        config.qwen3_input_tokens_per_request
+        + config.qwen3_output_tokens_per_request
+    )
+    qwen3_request_rps = intent_rps * config.qwen3_invocation_ratio
+    qwen3_token_demand_tps = qwen3_request_rps * qwen3_tokens_per_request
+    qwen3_lab_replicas = math.floor(
+        config.npu_count / max(1.0, config.qwen3_tensor_parallel_size)
+    )
+    qwen3_lab_token_capacity_tps = qwen3_lab_replicas * config.qwen3_token_capacity_per_replica
+    required_qwen3_replicas = (
+        math.ceil(qwen3_token_demand_tps / (
+            config.qwen3_token_capacity_per_replica * config.qwen3_target_util
+        ))
+        if qwen3_token_demand_tps > 0
+        else 0
+    )
+    required_production_npus = required_qwen3_replicas * math.ceil(config.qwen3_tensor_parallel_size)
+    qwen3_production_token_capacity_tps = required_qwen3_replicas * config.qwen3_token_capacity_per_replica
+    qwen3_lab_utilization = (
+        qwen3_token_demand_tps / qwen3_lab_token_capacity_tps
+        if qwen3_lab_token_capacity_tps
+        else math.inf
+    )
 
     base_cpu_ms_avg = weighted_average(config, "base_cpu_ms")
     agent_cpu_ms_avg = (
@@ -138,21 +167,27 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
     network_util = bandwidth_gbps / config.nic_gbps
     network_delay = queue_delay_ms(network_util, 0.1)
 
-    npu_util = intent_rps / npu_total_capacity_rps if npu_total_capacity_rps else math.inf
-    npu_queue_delay = queue_delay_ms(npu_util, 1_000.0 / npu_total_capacity_rps)
-    npu_inference_latency = config.intent_npu_latency_ms + npu_queue_delay
+    npu_util = (
+        qwen3_token_demand_tps / qwen3_production_token_capacity_tps
+        if qwen3_production_token_capacity_tps
+        else 0.0
+    )
+    npu_queue_delay = (
+        queue_delay_ms(npu_util, 1_000.0 / qwen3_production_token_capacity_tps)
+        if qwen3_production_token_capacity_tps
+        else 0.0
+    )
+    qwen3_inference_latency = config.qwen3_latency_ms + npu_queue_delay
 
-    active_intent_requests = intent_rps * config.intent_npu_latency_ms / 1000.0
+    active_qwen3_requests = qwen3_request_rps * config.qwen3_latency_ms / 1000.0
     npu_hbm_gb = 0.0
-    if intent_rps > 0:
-        active_npu_count = min(
-            config.npu_count,
-            math.ceil(intent_rps / config.npu_capacity_per_npu_rps)
-        )
+    if qwen3_request_rps > 0:
+        active_npu_count = required_qwen3_replicas * config.qwen3_tensor_parallel_size
         npu_hbm_gb = (
             active_npu_count * config.fixed_model_hbm_gb
-            + active_intent_requests * config.intent_npu_active_hbm_mb / 1024.0
+            + active_qwen3_requests * config.qwen3_active_hbm_mb / 1024.0
         )
+    production_npu_total_hbm_gb = required_production_npus * config.npu_hbm_per_npu_gb
 
     active_requests = rps_total * (weighted_average(config, "base_latency_ms") / 1000.0)
     ram_gb = (
@@ -180,7 +215,7 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
             event.base_latency_ms
             + config.intent_agent_fixed_latency_ms
             + config.intent_agent_cpu_ms
-            + npu_inference_latency
+            + config.qwen3_invocation_ratio * qwen3_inference_latency
             + cpu_delay
             + network_delay
         )
@@ -202,20 +237,28 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
         p95_latency = mean_latency * min(tail_amplifier, 10.0)
         p99_latency = mean_latency * min(tail_amplifier * 1.35, 15.0)
 
-    required_npus_70pct = (
-        math.ceil(intent_rps / (config.npu_capacity_per_npu_rps * config.npu_degraded_util))
-        if intent_rps > 0
-        else 0
-    )
-
     result: Dict[str, float | str] = {
         "user_count": config.user_count,
         "pdu_sessions_per_user": config.pdu_sessions_per_user,
         "npu_count": config.npu_count,
-        "npu_capacity_per_npu_rps": config.npu_capacity_per_npu_rps,
-        "npu_total_capacity_rps": npu_total_capacity_rps,
         "npu_hbm_per_npu_gb": config.npu_hbm_per_npu_gb,
         "npu_total_hbm_gb": npu_total_hbm_gb,
+        "qwen3_invocation_ratio": config.qwen3_invocation_ratio,
+        "qwen3_input_tokens_per_request": config.qwen3_input_tokens_per_request,
+        "qwen3_output_tokens_per_request": config.qwen3_output_tokens_per_request,
+        "qwen3_tokens_per_request": qwen3_tokens_per_request,
+        "qwen3_token_capacity_per_replica": config.qwen3_token_capacity_per_replica,
+        "qwen3_tensor_parallel_size": config.qwen3_tensor_parallel_size,
+        "qwen3_target_utilization": config.qwen3_target_util,
+        "qwen3_request_rps": qwen3_request_rps,
+        "qwen3_token_demand_tps": qwen3_token_demand_tps,
+        "qwen3_lab_replicas": qwen3_lab_replicas,
+        "qwen3_lab_token_capacity_tps": qwen3_lab_token_capacity_tps,
+        "qwen3_lab_utilization": qwen3_lab_utilization,
+        "qwen3_production_token_capacity_tps": qwen3_production_token_capacity_tps,
+        "required_qwen3_replicas": required_qwen3_replicas,
+        "required_production_npus": required_production_npus,
+        "production_npu_total_hbm_gb": production_npu_total_hbm_gb,
         "total_rps": rps_total,
         "eligible_intent_ratio": eligible_intent_ratio,
         "intent_eligible_rps": intent_eligible_rps,
@@ -231,8 +274,8 @@ def evaluate(config: ModelConfig, eligible_intent_ratio: float) -> Dict[str, flo
         "npu_utilization": npu_util,
         "npu_status": status(npu_util, config.npu_degraded_util, config.npu_high_risk_util),
         "npu_hbm_gb": npu_hbm_gb,
-        "npu_hbm_utilization": npu_hbm_gb / npu_total_hbm_gb if npu_total_hbm_gb else math.inf,
-        "required_npus_for_70pct_util": required_npus_70pct,
+        "npu_hbm_utilization": npu_hbm_gb / production_npu_total_hbm_gb if production_npu_total_hbm_gb else 0.0,
+        "required_npus_for_70pct_util": required_production_npus,
         "network_bandwidth_gbps": bandwidth_gbps,
         "network_utilization": network_util,
         "network_status": status(network_util, 0.70, 0.85),
@@ -275,7 +318,7 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
 
     plt.figure(figsize=(7, 4.2))
     plt.plot(x, [float(r["cpu_utilization"]) * 100.0 for r in rows], marker="o", label="CPU")
-    plt.plot(x, [float(r["npu_utilization"]) * 100.0 for r in rows], marker="o", label="NPU")
+    plt.plot(x, [float(r["npu_utilization"]) * 100.0 for r in rows], marker="o", label="Qwen3 NPU")
     plt.plot(x, [float(r["network_utilization"]) * 100.0 for r in rows], marker="o", label="Network")
     plt.axhline(70, color="tab:orange", linestyle="--", linewidth=1, label="70% threshold")
     plt.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
@@ -313,17 +356,20 @@ def main() -> None:
         for ratio in INTENT_SETTINGS
     ]
     write_csv(sensitivity_rows, out_dir / "agentic_resource_sensitivity.csv")
-    capacity_rows = [
-        evaluate(replace(config, npu_capacity_per_npu_rps=capacity), ratio)
-        for capacity in SENSITIVITY_NPU_CAPACITIES
-        for ratio in INTENT_SETTINGS
+    qwen3_rows = [
+        evaluate(
+            replace(config, qwen3_invocation_ratio=invocation_ratio, qwen3_token_capacity_per_replica=capacity),
+            1.0,
+        )
+        for invocation_ratio in QWEN3_INVOCATION_SETTINGS
+        for capacity in QWEN3_TOKEN_CAPACITY_SETTINGS
     ]
-    write_csv(capacity_rows, out_dir / "agentic_npu_capacity_sensitivity.csv")
+    write_csv(qwen3_rows, out_dir / "agentic_qwen3_sizing_sensitivity.csv")
     maybe_write_plots(rows, out_dir)
 
     print("Wrote outputs/agentic_resource_results.csv")
     print("Wrote outputs/agentic_resource_sensitivity.csv")
-    print("Wrote outputs/agentic_npu_capacity_sensitivity.csv")
+    print("Wrote outputs/agentic_qwen3_sizing_sensitivity.csv")
     if (out_dir / "agentic_resource_utilization.png").exists():
         print("Wrote outputs/agentic_resource_utilization.png")
         print("Wrote outputs/agentic_latency.png")
