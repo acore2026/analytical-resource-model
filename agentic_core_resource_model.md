@@ -41,8 +41,11 @@ The baseline total is `104,300 requests/s`. Intent is only applied to initial PD
 
 | Parameter | Value |
 | --- | ---: |
+| Host CPU platform | Kunpeng 920 |
 | CPU cluster capacity | 256 CPU cores = 256,000 CPU-ms/s |
 | RAM capacity | 256 GB |
+| Inference runtime | vLLM Ascend 0.11.0 |
+| Intent inference model | Qwen3-30B-A3B |
 | NPU count | 8 NPUs |
 | NPU capacity | 4,300 intent inferences/s/NPU |
 | Total NPU inference capacity | 34,400 intent inferences/s |
@@ -59,13 +62,13 @@ The baseline total is `104,300 requests/s`. Intent is only applied to initial PD
 | Fixed inference model memory | 16 GB HBM per active NPU |
 | Active intent HBM | 4 MB/active intent request |
 
-`CPU-ms` means one CPU core occupied for one millisecond. For example, `2 CPU-ms/request` at `100,000 requests/s` consumes `200 CPU cores`.
+`CPU-ms` means one CPU core occupied for one millisecond. For example, `2 CPU-ms/request` at `100,000 requests/s` consumes `200 CPU cores`. In this version, CPU costs are interpreted as host-side budgets on Kunpeng 920 CPU cores, while NPU inference latency and capacity are interpreted for Qwen3-30B-A3B served through vLLM Ascend 0.11.0 on the Ascend 910B4 NPU pool.
 
 The NPU reference profile is based on an available `8 x Ascend 910B4` deployment with `32 GB HBM/NPU`. The `4,300 intent inferences/s/NPU` capacity is not a measured 910B4 result. It is the analytical threshold needed for this workload: at the peak modeled intent rate of `24,000 requests/s`, eight NPUs must each sustain about `24,000 / (8 * 0.70) = 4,286 intent inferences/s/NPU` to keep NPU utilization at or below 70%. The model therefore treats per-NPU capacity as a tunable assumption and reports a sensitivity sweep.
 
 ## Ascend 910B4 NPU Capacity Rationale
 
-The available `npu-smi` snapshot establishes the deployment shape used by the model: eight `910B4` NPUs are visible and each card reports `32,768 MB` of HBM capacity. This is useful for sizing NPU count and HBM headroom, but it is not enough to derive per-request serving throughput because the snapshot does not include model type, prompt length, output length, batch size, scheduler policy, or end-to-end inference latency under load.
+The available `npu-smi` snapshot establishes the deployment shape used by the model: eight `910B4` NPUs are visible and each card reports `32,768 MB` of HBM capacity. The concrete inference stack is vLLM Ascend 0.11.0 serving Qwen3-30B-A3B, with Kunpeng 920 CPUs handling host-side runtime and agent logic. This is useful for sizing CPU/NPU/HBM headroom, but it is not enough to derive per-request serving throughput because the snapshot does not include prompt length, output length, batch size, scheduler policy, or end-to-end inference latency under load.
 
 Public material on Ascend hardware is still fragmented by variant and system vendor. Third-party specification summaries commonly place Ascend 910B-class FP16 peak compute around `320 TFLOPS`, while [Huawei's CANN documentation](https://www.hiascend.com/document/detail/en/canncommercial/800/opdevg/Ascendcopdevg/atlas_ascendc_10_0009.html) describes the Ascend AI Core compute units as Cube, Vector, and Scalar units, and [public 910B specification summaries](https://chip.computer/chips/huawei/ascend-910b) provide a useful but non-authoritative peak-compute reference. The Cube unit is the matrix engine that matters most for transformer-style inference, while the Vector and Scalar units handle non-matrix operations and control work. These facts support using the 910B4 as an accelerator-backed inference resource, but they do not directly determine `intent inferences/s/NPU`.
 
@@ -76,7 +79,7 @@ effective_npu_flops [FLOP/s] =
   peak_npu_flops [FLOP/s] * efficiency [unitless]
 
 flops_per_intent [FLOP/request] ~=
-  2 * model_parameters [parameters] * processed_tokens [tokens/request]
+  2 * active_model_parameters [parameters] * processed_tokens [tokens/request]
 
 npu_capacity [requests/s/NPU] =
   effective_npu_flops [FLOP/s] / flops_per_intent [FLOP/request]
@@ -98,7 +101,7 @@ max_flops_per_request_at_70pct =
   52e9 FLOP/request
 ```
 
-At `30%` effective serving efficiency, this falls to about `16e9 FLOP/request`. This range is plausible for lightweight intent classification, constrained intent parsing, short-output plan selection, cached tool selection, or batched small-model inference. It is not a safe assumption for full LLM generation on every request. Therefore, the model keeps NPU capacity configurable and includes `2,000`, `3,000`, `4,300`, `5,000`, and `8,000 intent/s/NPU` sensitivity points.
+At `30%` effective serving efficiency, this falls to about `16e9 FLOP/request`. For Qwen3-30B-A3B, the formula should use the active parameters and the actual processed-token count for the intended prompt template, not only the model name. This range is plausible for lightweight intent classification, constrained intent parsing, short-output plan selection, cached tool selection, or batched short-output inference. It is not a safe assumption for full LLM generation on every request. Therefore, the model keeps NPU capacity configurable and includes `2,000`, `3,000`, `4,300`, `5,000`, and `8,000 intent/s/NPU` sensitivity points.
 
 ## Derivation of Agentic Cost Assumptions
 

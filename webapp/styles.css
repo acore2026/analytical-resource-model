@@ -376,6 +376,34 @@ input[type="range"] {
   line-height: 1.45;
 }
 
+.stack-profile {
+  display: grid;
+  gap: 4px;
+  margin: -4px 0 14px;
+  padding: 12px;
+  border: 1px solid #c7d2c3;
+  background: #f4f7f1;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.stack-profile span {
+  color: var(--accent);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.stack-profile strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.stack-profile small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .event-summary {
   margin-top: 10px;
   padding-top: 12px;

@@ -41,8 +41,11 @@ lambda_total [requests/s] = sum_i(lambda_i)
 
 | 参数 | 取值 |
 | --- | ---: |
+| 主机 CPU 平台 | Kunpeng 920 |
 | CPU 集群容量 | 256 CPU cores = 256,000 CPU-ms/s |
 | RAM 容量 | 256 GB |
+| 推理运行时 | vLLM Ascend 0.11.0 |
+| 意图推理模型 | Qwen3-30B-A3B |
 | NPU 数量 | 8 NPUs |
 | NPU 推理能力 | 4,300 intent inferences/s/NPU |
 | NPU 总推理能力 | 34,400 intent inferences/s |
@@ -59,13 +62,13 @@ lambda_total [requests/s] = sum_i(lambda_i)
 | 固定推理模型内存 | 每个活跃 NPU 占用 16 GB HBM |
 | 活跃意图 HBM | 4 MB/active intent request |
 
-`CPU-ms` 表示一个 CPU 核被占用一毫秒。例如，`2 CPU-ms/request` 在 `100,000 requests/s` 下消耗 `200 CPU cores`。
+`CPU-ms` 表示一个 CPU 核被占用一毫秒。例如，`2 CPU-ms/request` 在 `100,000 requests/s` 下消耗 `200 CPU cores`。在本版本中，CPU 成本表示 Kunpeng 920 CPU 核上的主机侧预算；NPU 推理时延和能力则表示通过 vLLM Ascend 0.11.0 在 Ascend 910B4 NPU 池上服务 Qwen3-30B-A3B 的预算。
 
 NPU 参考配置基于可用的 `8 x Ascend 910B4` 部署，每张 NPU 具有 `32 GB HBM`。`4,300 intent inferences/s/NPU` 不是 910B4 的实测结果，而是该工作负载下的分析阈值：在模型峰值意图速率 `24,000 requests/s` 下，8 张 NPU 若要保持不超过 70% 利用率，每张 NPU 需要约 `24,000 / (8 * 0.70) = 4,286 intent inferences/s/NPU`。因此，模型将单 NPU 推理能力作为可调假设，并报告敏感性扫描。
 
 ## Ascend 910B4 NPU 能力依据
 
-可用的 `npu-smi` 快照可以确定本文模型采用的部署形态：系统中可见 8 张 `910B4` NPU，每张卡报告 `32,768 MB` HBM 容量。这足以用于设定 NPU 数量和 HBM 余量，但还不足以直接推导每请求服务吞吐量，因为该快照没有包含模型类型、提示长度、输出长度、批大小、调度策略或高负载下端到端推理时延。
+可用的 `npu-smi` 快照可以确定本文模型采用的部署形态：系统中可见 8 张 `910B4` NPU，每张卡报告 `32,768 MB` HBM 容量。具体推理栈为 vLLM Ascend 0.11.0 服务 Qwen3-30B-A3B，Kunpeng 920 CPU 处理主机侧运行时和 Agent 逻辑。这足以用于设定 CPU/NPU/HBM 余量，但还不足以直接推导每请求服务吞吐量，因为该快照没有包含提示长度、输出长度、批大小、调度策略或高负载下端到端推理时延。
 
 关于 Ascend 硬件的公开资料会因具体变体和系统厂商不同而存在差异。第三方规格摘要通常将 Ascend 910B 级别的 FP16 峰值算力放在约 `320 TFLOPS`，而[华为 CANN 文档](https://www.hiascend.com/document/detail/en/canncommercial/800/opdevg/Ascendcopdevg/atlas_ascendc_10_0009.html)说明 Ascend AI Core 的计算单元包括 Cube、Vector 和 Scalar，[公开 910B 规格摘要](https://chip.computer/chips/huawei/ascend-910b)也可以作为有用但非权威的峰值算力参考。Cube 单元是对 Transformer 类推理最关键的矩阵计算引擎，Vector 和 Scalar 单元则处理非矩阵操作和控制类工作。这些信息支持将 910B4 作为加速器推理资源建模，但不能直接决定 `intent inferences/s/NPU`。
 
@@ -76,7 +79,7 @@ effective_npu_flops [FLOP/s] =
   peak_npu_flops [FLOP/s] * efficiency [unitless]
 
 flops_per_intent [FLOP/request] ~=
-  2 * model_parameters [parameters] * processed_tokens [tokens/request]
+  2 * active_model_parameters [parameters] * processed_tokens [tokens/request]
 
 npu_capacity [requests/s/NPU] =
   effective_npu_flops [FLOP/s] / flops_per_intent [FLOP/request]
@@ -98,7 +101,7 @@ max_flops_per_request_at_70pct =
   52e9 FLOP/request
 ```
 
-若有效服务效率为 `30%`，该预算降至约 `16e9 FLOP/request`。这个范围对轻量意图分类、受限意图解析、短输出计划选择、缓存工具选择或批处理小模型推理是合理的；但不能安全地假设每个请求都执行完整 LLM 生成。因此，模型保持 NPU 能力可配置，并提供 `2,000`、`3,000`、`4,300`、`5,000` 和 `8,000 intent/s/NPU` 的敏感性点。
+若有效服务效率为 `30%`，该预算降至约 `16e9 FLOP/request`。对于 Qwen3-30B-A3B，该公式应使用实际激活参数量和目标提示模板下的实际处理 token 数，而不仅仅使用模型名称。这个范围对轻量意图分类、受限意图解析、短输出计划选择、缓存工具选择或批处理短输出推理是合理的；但不能安全地假设每个请求都执行完整 LLM 生成。因此，模型保持 NPU 能力可配置，并提供 `2,000`、`3,000`、`4,300`、`5,000` 和 `8,000 intent/s/NPU` 的敏感性点。
 
 ## Agentic 成本假设推导
 
