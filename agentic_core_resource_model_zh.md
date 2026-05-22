@@ -72,7 +72,7 @@ lambda_total [requests/s] = sum_i(lambda_i)
 
 可用的 `npu-smi` 快照可以确定本文模型采用的实验室形态：系统中可见 8 张 `910B4` NPU，每张卡报告 `32,768 MB` HBM 容量。具体推理栈为 vLLM Ascend 0.11.0 服务 Qwen3-30B-A3B，Kunpeng 920 CPU 处理主机侧运行时和 Agent 逻辑。这可以定义参考平台，但不应被理解为足以支撑完整生产负载。
 
-[GPUStack 的 Qwen3-30B-A3B on Ascend 910B 基准](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/)报告，在 `128 input tokens` 和 `4 output tokens` 的短提示配置下，优化结果为 `15,040.15 total tokens/s`。[vLLM-Ascend 的 Qwen3-30B-A3B 教程](https://docs.vllm.ai/projects/ascend/en/v0.11.0-dev/tutorials/multi_npu_qwen3_moe.html)说明，32 GB NPU 卡应使用至少 `4` 的 tensor parallel size，因此模型将一个 Qwen3 副本视为 `4 NPUs`。该基准来自特定软硬件栈，应作为参考点，而不是本系统实测值。
+[GPUStack 的 Qwen3-30B-A3B on Ascend 910B 基准](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/)报告，在 `128 input tokens` 和 `4 output tokens` 的短提示配置下，优化结果为 `15,040.15 total tokens/s`。[vLLM-Ascend 文档](https://docs.vllm.ai/projects/ascend/en/v0.18.0/)包含 Qwen3-30B-A3B 指引；对于 32 GB NPU 卡，模型采用 tensor parallel size `4`，因此一个 Qwen3 副本视为 `4 NPUs`。该基准来自特定软硬件栈，应作为参考点，而不是本系统实测值。
 
 模型采用两级推理路径。所有意图请求都经过轻量解析、约束提取和工具选择；只有复杂或模糊意图请求调用 Qwen3-30B-A3B：
 
