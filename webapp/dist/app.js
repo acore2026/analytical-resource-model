@@ -55,6 +55,7 @@ const MODEL_INPUT_IDS = [
 const INPUT_IDS = [...MODEL_INPUT_IDS, ...EVENTS.map((event) => event.inputId)];
 const I18N = {
     en: {
+        easyExplanation: "Easy explanation",
         modelMarkdown: "Model markdown",
         open: "OPEN",
         userModel: "User Model",
@@ -174,6 +175,7 @@ const I18N = {
         coresUnit: "cores"
     },
     zh: {
+        easyExplanation: "简明说明",
         modelMarkdown: "模型说明文档",
         open: "打开",
         userModel: "用户模型",
@@ -643,6 +645,10 @@ function applyTranslations() {
     docLink.href = currentLang === "zh"
         ? "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_resource_model_zh.md"
         : "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_resource_model.md";
+    const easyDocLink = mustGet("easyDocLink");
+    easyDocLink.href = currentLang === "zh"
+        ? "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_easy_explanation_zh.md"
+        : "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_easy_explanation.md";
     mustGet("sweepChart").setAttribute("aria-label", t("intentSweepAria"));
 }
 function recompute() {

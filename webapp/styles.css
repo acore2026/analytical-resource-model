@@ -121,6 +121,16 @@ h2 {
   box-shadow: 0 18px 40px rgba(49, 58, 48, 0.22);
 }
 
+.doc-link.easy-doc {
+  border-color: #b24e00;
+  background: #d66a00;
+  color: #ffffff;
+}
+
+.doc-link.easy-doc .open-badge {
+  color: #b24e00;
+}
+
 .lang-toggle {
   min-height: 44px;
   border: 1px solid var(--line);
