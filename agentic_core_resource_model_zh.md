@@ -61,6 +61,72 @@ lambda_total [requests/s] = sum_i(lambda_i)
 
 `CPU-ms` 表示一个 CPU 核被占用一毫秒。例如，`2 CPU-ms/request` 在 `100,000 requests/s` 下消耗 `200 CPU cores`。
 
+## Agentic 成本假设推导
+
+提案中的若干架构行为会产生 Agentic 额外开销：UE NAS 请求无论是否携带意图都会被转发给 NW-Agent；NW-Agent 需要根据网络条件和约束检查请求是否可满足；意图请求需要进行意图理解、任务编排、工具选择和工具调用；Planning Agent 可能与 Connection Agent 等专用 Agent 交互；TRF/ARF 为工具或 Agent 的发现与选择提供元数据。在本基本流程模型中，假设 TRF/ARF 元数据已缓存在服务 Agent 进程内，因此仓库发现不会引入每请求网络往返。
+
+因此，下列数值是根据提案流程步骤拆解得到的工程预算，不是部署测量常数。它们应被理解为名义假设，后续可以用原型测量值替换。
+
+### 非意图 Agent CPU 成本
+
+对于不携带意图的请求，提案仍要求请求经过 NW-Agent。Agent 不需要语义意图推理或任务分解，但仍需要执行请求分类、快速约束检查、缓存元数据查询和工具封装准备，然后再进入确定性 NF 执行。
+
+| 组件 | 架构依据 | CPU 预算 |
+| --- | --- | ---: |
+| NAS/请求归一化 | 将 UE 请求转换为 Agent 内部请求对象。 | 0.05 CPU-ms/request |
+| 无意图检测和流程分类 | 判断请求不携带意图，并选择确定性流程路径。 | 0.05 CPU-ms/request |
+| 缓存 ARF/TRF 元数据查询 | 查询本地缓存的 Agent/工具描述信息，确定相关连接服务路径。 | 0.05 CPU-ms/request |
+| 策略、签约和资源快速检查 | 在调用确定性工具前执行轻量可行性检查。 | 0.08 CPU-ms/request |
+| 工具封装、状态更新和追踪 | 准备工具调用上下文并记录请求状态和进度。 | 0.07 CPU-ms/request |
+| **合计** |  | **0.30 CPU-ms/request** |
+
+该值只表示增量 Agentic CPU 成本。注册、PDU 会话、业务请求、AN 释放、切换和寻呼等确定性工作已经由各事件的基线 CPU 值单独表示。
+
+### 意图 Agent CPU 成本
+
+对于携带意图的请求，提案额外引入半结构化意图处理、约束解释、动态任务编排、工具选择，以及可能的 Planning Agent 与 Connection Agent 协作。模型将这些 CPU 侧 Agent 工作设为 `2.0 CPU-ms/request`，不包含加速器推理。
+
+| 组件 | 架构依据 | CPU 预算 |
+| --- | --- | ---: |
+| 意图容器解析 | 解码 NAS 携带的意图并提取标准字段。 | 0.25 CPU-ms/request |
+| 意图归一化和约束提取 | 解释描述、目标、条件、指南和额外信息。 | 0.20 CPU-ms/request |
+| UE/会话/网络上下文查询 | 获取 Agent 所需的签约、会话、位置和缓存工具上下文。 | 0.25 CPU-ms/request |
+| 策略、签约和资源可行性检查 | 检查意图在运营商约束和网络约束下是否可满足。 | 0.35 CPU-ms/request |
+| 任务分解和工具选择 | 生成有序任务计划，并选择 SMC、PCC、SMAU、Analytics、Traffic Treatment 或 UP Configuration 等工具。 | 0.45 CPU-ms/request |
+| Agent 间任务封装处理 | 在需要协作时准备 Planning Agent 到专用 Agent 的任务请求。 | 0.25 CPU-ms/request |
+| 状态更新、进度跟踪和追踪 | 保存请求状态、工具结果和可观测性元数据。 | 0.25 CPU-ms/request |
+| **合计** |  | **2.00 CPU-ms/request** |
+
+### 意图时延
+
+时延被拆分为确定性流程时延、CPU 排队、固定 Agent 编排时延和加速器推理时延。意图路径采用如下排队前服务时间预算：
+
+```text
+Intent agent latency [ms/request] =
+  4 ms fixed orchestration
++ 2 ms CPU-side agent service
++ 8 ms GPU inference service
+= 14 ms/request before queueing
+```
+
+其中，`4 ms` 固定编排项覆盖解析、可行性检查、任务计划构造、工具封装创建和本地状态更新等墙钟时间。`2 ms` CPU 侧服务项对应 `2.0 CPU-ms/request` 的意图 CPU 预算，即假设其在一个 CPU 核上串行执行。`8 ms` GPU 项表示用于意图理解和计划生成的名义模型推理服务时间。随后，模型会根据 CPU/GPU/网络利用率叠加排队延迟。
+
+对于非意图请求，模型使用 `1 ms/request` 固定 Agent 时延，因为该请求走快速路径：分类、检查缓存元数据，并调用确定性工具路径，不执行语义推理。
+
+### 意图额外带宽
+
+基线事件带宽已经表示传统流程的普通控制面信令。模型只对携带意图的请求额外增加 `12 KB/request`，用于表示 Agentic 架构引入的附加字节。
+
+| 组件 | 架构依据 | 带宽预算 |
+| --- | --- | ---: |
+| 意图 NAS 容器和归一化请求负载 | 将半结构化意图字段从 UE 传递给 Agent，并转换为内部 Agent 请求。 | 2 KB/request |
+| 计划/任务元数据 | 编码任务描述、目标能力、约束和所选流程上下文。 | 3 KB/request |
+| 工具调用封装元数据 | 为若干工具调用携带工具名称、输入、前置/后置条件标识和结果元数据。 | 5 KB/request |
+| Agent 间状态和追踪元数据 | 记录 Planning Agent、专用 Agent 和工具承载 NF 之间的进度/结果上报。 | 2 KB/request |
+| **合计** |  | **12 KB/request** |
+
+对于非意图请求，额外 Agentic 带宽建模为 `0 KB/request`，因为现有 NAS/NF 信令已经包含在基线事件带宽中，且本地缓存元数据查询不会产生每请求仓库流量。
+
 ## 模型
 
 令 `rho_I` 表示可携带意图事件中的意图比例。若事件 `i` 可携带意图，则 `e_i` 为 1，否则为 0。

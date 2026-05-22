@@ -61,6 +61,72 @@ The baseline total is `104,300 requests/s`. Intent is only applied to initial PD
 
 `CPU-ms` means one CPU core occupied for one millisecond. For example, `2 CPU-ms/request` at `100,000 requests/s` consumes `200 CPU cores`.
 
+## Derivation of Agentic Cost Assumptions
+
+The proposal defines several architecture behaviors that create agentic overhead: UE NAS requests are forwarded to NW-Agents with or without intent; NW-Agents check whether the request can be fulfilled under network conditions and constraints; intent requests require understanding, task composition, tool selection, and tool invocation; the Planning Agent may interact with specialized agents such as the Connection Agent; and TRF/ARF provide tool or agent metadata for discovery and selection. In the basic-procedure model, TRF/ARF metadata is assumed to be cached in the serving agent process, so repository discovery does not add a per-request network round trip.
+
+The values below are therefore engineering budgets derived from the proposal procedure steps, not measured deployment constants. They should be interpreted as nominal assumptions that can be replaced by prototype measurements.
+
+### Non-Intent Agent CPU Cost
+
+For a request without intent, the proposal still routes the request through an NW-Agent. The agent does not need semantic intent inference or task decomposition, but it still performs request classification, fast-path constraint checks, cached metadata lookup, and tool wrapper preparation before deterministic NF execution.
+
+| Component | Rationale from architecture | CPU budget |
+| --- | --- | ---: |
+| NAS/request normalization | Convert the UE request into an internal agent request object. | 0.05 CPU-ms/request |
+| Intent absence detection and procedure classification | Determine that no intent payload is present and select the deterministic procedure path. | 0.05 CPU-ms/request |
+| Cached ARF/TRF metadata lookup | Check locally cached agent/tool descriptors for the relevant connection-service path. | 0.05 CPU-ms/request |
+| Policy, subscription, and resource fast-path checks | Apply lightweight feasibility checks before invoking deterministic tools. | 0.08 CPU-ms/request |
+| Tool wrapper, state update, and tracing | Prepare tool invocation context and record request state/progress. | 0.07 CPU-ms/request |
+| **Total** |  | **0.30 CPU-ms/request** |
+
+This is the incremental agentic CPU cost only. The deterministic registration, PDU session, service request, AN release, handover, and paging work is captured separately in the per-event base CPU values.
+
+### Intent Agent CPU Cost
+
+For intent-bearing requests, the proposal adds semi-structured intent processing, constraint interpretation, dynamic task composition, tool selection, and possible Planning Agent to Connection Agent cooperation. The model assigns `2.0 CPU-ms/request` to this CPU-side agent work, excluding accelerator inference.
+
+| Component | Rationale from architecture | CPU budget |
+| --- | --- | ---: |
+| Intent container parsing | Decode the NAS-carried intent and extract standardized fields. | 0.25 CPU-ms/request |
+| Intent normalization and constraint extraction | Interpret description, goals, conditions, guidelines, and extra information. | 0.20 CPU-ms/request |
+| UE/session/network context lookup | Gather subscription, session, location, and cached tool context needed by the agent. | 0.25 CPU-ms/request |
+| Policy, subscription, and resource feasibility checks | Check whether the intent can be fulfilled under operator and network constraints. | 0.35 CPU-ms/request |
+| Task decomposition and tool selection | Compose the ordered task plan and select tools such as SMC, PCC, SMAU, analytics, traffic treatment, or UP configuration tools. | 0.45 CPU-ms/request |
+| Inter-agent task envelope handling | Prepare Planning Agent to specialized-agent task requests when cooperation is needed. | 0.25 CPU-ms/request |
+| State update, progress tracking, and tracing | Store request state, tool results, and observability metadata. | 0.25 CPU-ms/request |
+| **Total** |  | **2.00 CPU-ms/request** |
+
+### Intent Latency
+
+Latency is split into deterministic procedure latency, CPU queueing, fixed agent orchestration latency, and accelerator inference latency. The intent path uses the following pre-queue service-time budget:
+
+```text
+Intent agent latency [ms/request] =
+  4 ms fixed orchestration
++ 2 ms CPU-side agent service
++ 8 ms GPU inference service
+= 14 ms/request before queueing
+```
+
+The `4 ms` fixed orchestration term covers wall-clock processing around parsing, feasibility checking, task-plan construction, tool wrapper creation, and local state update. The `2 ms` CPU-side service term corresponds to the `2.0 CPU-ms/request` intent CPU budget when it is serialized on one core. The `8 ms` GPU term represents nominal model inference service time for intent understanding and plan generation. Queueing delay is then added based on CPU/GPU/network utilization.
+
+For non-intent requests, the model uses `1 ms/request` of fixed agent latency because the request follows a fast path: classify, check cached metadata, and invoke the deterministic tool path without semantic inference.
+
+### Intent Extra Bandwidth
+
+Base event bandwidth already represents ordinary control-plane signaling for the traditional procedure. The model adds `12 KB/request` only for intent-bearing requests to represent extra bytes introduced by the agentic architecture.
+
+| Component | Rationale from architecture | Bandwidth budget |
+| --- | --- | ---: |
+| Intent NAS container and normalized request payload | Carries semi-structured intent fields from UE to the agent and into the internal agent request. | 2 KB/request |
+| Planning/task metadata | Encodes task description, target ability, constraints, and selected procedure context. | 3 KB/request |
+| Tool invocation wrapper metadata | Carries selected tool names, inputs, pre/post-condition identifiers, and result metadata for several tool calls. | 5 KB/request |
+| Inter-agent status and tracing metadata | Captures progress/result reporting between Planning Agent, specialized agents, and tool-hosting NFs. | 2 KB/request |
+| **Total** |  | **12 KB/request** |
+
+For non-intent requests, extra agentic bandwidth is modeled as `0 KB/request` because the existing NAS/NF signaling is already included in the base event bandwidth and cached local metadata lookup does not require per-request repository traffic.
+
 ## Model
 
 Let `rho_I` be the intent ratio among intent-eligible events. Let `e_i` be 1 if event `i` is intent-eligible and 0 otherwise.
