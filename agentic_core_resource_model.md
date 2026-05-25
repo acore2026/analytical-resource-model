@@ -126,7 +126,7 @@ $$
 F(u)=u+\alpha u^2,\quad \alpha=0.15
 $$
 
-The coefficient $\alpha=0.15$ is an analytical sensitivity parameter. It is not a deployment measurement. It can be calibrated with measured CPU profiling, NPU serving throughput, and network telemetry after an implementation is available. The selected default keeps the model easy to explain while ensuring that utilization curves bend upward as offered load increases.
+The coefficient $\alpha=0.15$ is an analytical sensitivity parameter. It is not a deployment measurement and is not claimed as a universal value from literature. The references at the end of this document support the need for nonlinear overhead terms in high-concurrency LLM serving, especially from scheduling, batching, queueing, and KV/cache pressure. The exact value of $\alpha$ should be calibrated with measured CPU profiling, NPU serving throughput, and network telemetry after an implementation is available. The selected default represents a moderate overhead case for sensitivity analysis.
 
 ### Why Nonlinear Overhead Appears
 
@@ -141,7 +141,7 @@ The nonlinear function represents the reduction of effective serving efficiency 
 
 KV/cache memory pressure is important for Qwen3 serving. During high concurrency, active requests keep key-value cache entries, runtime buffers, and scheduling state resident for longer periods. This reduces the effective throughput available for new requests even when the raw token profile per request is unchanged. Therefore, the model does not claim that Qwen3 produces more semantic tokens per request; it uses effective token demand to represent serving-system overhead around the model.
 
-The nonlinear assumption is supported by established LLM-serving literature. Sarathi-Serve describes the throughput-latency tradeoff between prefill and decode phases and introduces scheduling to reduce stalls ([arXiv:2403.02310](https://arxiv.org/abs/2403.02310), [OSDI 2024 PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)). vLLM/PagedAttention shows that KV-cache memory is large, dynamic, and can limit batching efficiency when unmanaged ([arXiv:2309.06180](https://arxiv.org/abs/2309.06180)). Microsoft Research formulates online LLM inference scheduling with KV-cache memory constraints and explicitly treats KV-cache management as a latency and utilization problem ([Microsoft Research](https://www.microsoft.com/en-us/research/publication/online-scheduling-for-llm-inference-with-kv-cache-constraints/), [arXiv:2502.07115](https://arxiv.org/abs/2502.07115)). These references justify modeling high-concurrency inference as a convex capacity problem. The exact coefficient remains tunable for deployment calibration.
+The nonlinear assumption is an engineering model derived from these serving-system effects. The cited papers do not define the exact function $F(u)=u+\alpha u^2$ or the coefficient $\alpha=0.15$; they justify why a purely linear model can understate high-load overhead.
 
 The following subsections show how the model applies the convex overhead function to CPU, Qwen3/NPU, network, and latency.
 
@@ -235,3 +235,20 @@ With $128$ configured NPUs assigned to Qwen3 serving and $10\%$ Qwen3 invocation
 ## Model Boundary
 
 The numerical values are analytical input parameters for capacity and sensitivity analysis. Actual deployment results depend on model size, batching behavior, inference hardware, NF implementation, database access latency, message encoding, tool granularity, and operator policy logic. Measured deployment data can be used to calibrate CPU time, inference latency, memory traffic, message size, and queueing behavior.
+
+## References
+
+1. [Sarathi-Serve: Tackling User-Generated Request Variability in LLM Inference Serving](https://arxiv.org/abs/2403.02310), also published at OSDI 2024 ([PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)).
+   This paper does not define our convex function or $\alpha=0.15$. Its useful evidence is that LLM serving performance depends on request scheduling and batching across prefill and decode phases. It reports that tail latency rises as request rate increases, which supports modeling high-load serving overhead as nonlinear instead of purely linear.
+
+2. [Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180).
+   This paper explains why KV-cache memory management is central to LLM serving. KV cache is large and dynamic; inefficient memory management reduces batching efficiency and serving throughput. This supports the model term that converts raw Qwen3 token demand into effective token demand under KV/cache pressure.
+
+3. [Online Scheduling for LLM Inference with KV Cache Constraints](https://www.microsoft.com/en-us/research/publication/online-scheduling-for-llm-inference-with-kv-cache-constraints/) and [arXiv:2502.07115](https://arxiv.org/abs/2502.07115).
+   This work treats KV-cache capacity as a scheduling constraint for LLM inference. It supports the view that utilization, latency, and memory pressure are coupled under concurrency, so NPU serving demand should not be modeled only as raw tokens divided by peak token capacity.
+
+4. [GPUStack Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/).
+   This benchmark provides the reference token capacity used in the model: `15,040.15 total tokens/s` for Qwen3-30B-A3B with `128 input tokens` and `4 output tokens`.
+
+5. [vLLM Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/).
+   This documentation provides implementation context for serving Qwen3-family models on Ascend through vLLM Ascend. It supports the tensor-parallel serving assumptions used for the configured NPU cluster.

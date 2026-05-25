@@ -126,7 +126,7 @@ $$
 F(u)=u+\alpha u^2,\quad \alpha=0.15
 $$
 
-系数 $\alpha=0.15$ 是分析型敏感性参数，不是部署实测值。系统实现后，可使用 CPU profiling、NPU 服务吞吐和网络遥测数据校准该参数。默认值的目标是保持模型易于解释，同时保证利用率曲线会随负载升高而向上弯曲。
+系数 $\alpha=0.15$ 是分析型敏感性参数，不是部署实测值，也不应被表述为文献给出的通用常数。本文末尾的参考文献支持在高并发 LLM 服务中引入非线性开销项，主要原因包括调度、批处理、排队和 KV/cache 压力。具体 $\alpha$ 取值应在系统实现后，使用 CPU profiling、NPU 服务吞吐和网络遥测数据进行校准。当前默认值表示中等非线性开销场景，用于敏感性分析。
 
 ### 为什么会出现非线性开销
 
@@ -141,7 +141,7 @@ $$
 
 KV/cache 内存压力对 Qwen3 服务尤其重要。在高并发场景下，活跃请求会更长时间占用 key-value cache、运行时缓冲区和调度状态。这会降低新请求可用的有效吞吐能力，即使每个请求的原始 token 配置没有变化。因此，模型并不表示 Qwen3 为单个请求生成了更多语义 token；模型使用有效 token 需求来表示模型服务系统周边的额外开销。
 
-该非线性假设有 LLM 服务领域的文献支持。Sarathi-Serve 讨论了 prefill 和 decode 阶段之间的吞吐-时延权衡，并通过调度降低 stall（[arXiv:2403.02310](https://arxiv.org/abs/2403.02310)，[OSDI 2024 PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)）。vLLM/PagedAttention 指出 KV-cache 规模大、动态变化，并且在管理不当时会限制批处理效率（[arXiv:2309.06180](https://arxiv.org/abs/2309.06180)）。Microsoft Research 将带 KV-cache 内存约束的在线 LLM 推理调度建模为时延和利用率问题（[Microsoft Research](https://www.microsoft.com/en-us/research/publication/online-scheduling-for-llm-inference-with-kv-cache-constraints/)，[arXiv:2502.07115](https://arxiv.org/abs/2502.07115)）。这些资料支撑将高并发推理建模为凸性容量问题；具体系数仍应通过部署数据校准。
+本文的非线性假设是基于上述服务系统效应形成的工程模型。参考文献并没有直接定义 $F(u)=u+\alpha u^2$，也没有给出 $\alpha=0.15$；它们支持的结论是，纯线性模型可能低估高负载场景下的服务开销。
 
 以下小节说明模型如何将凸性开销函数分别应用到 CPU、Qwen3/NPU、网络和时延。
 
@@ -235,3 +235,20 @@ $$
 ## 模型边界
 
 所有数值均为容量和敏感性分析的分析型输入参数。实际部署结果取决于模型大小、批处理行为、推理硬件、NF 实现、数据库访问时延、消息编码、工具粒度和运营商策略逻辑。实测部署数据可用于校准 CPU 时间、推理时延、内存流量、消息大小和排队行为。
+
+## 参考文献
+
+1. [Sarathi-Serve: Tackling User-Generated Request Variability in LLM Inference Serving](https://arxiv.org/abs/2403.02310)，OSDI 2024 版本见 [PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)。
+   该论文没有定义本文使用的凸性函数，也没有给出 $\alpha=0.15$。它对本文有用的证据是：LLM 服务性能受 prefill 和 decode 阶段之间的调度与批处理影响，并且论文结果显示请求速率升高时尾时延会上升。这支持将高负载服务开销建模为非线性，而不是纯线性。
+
+2. [Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)。
+   该论文说明 KV-cache 内存管理是 LLM 服务的关键问题。KV cache 规模大且动态变化；低效内存管理会降低批处理效率和服务吞吐。因此，本文将原始 Qwen3 token 需求转换为考虑 KV/cache 压力后的有效 token 需求。
+
+3. [Online Scheduling for LLM Inference with KV Cache Constraints](https://www.microsoft.com/en-us/research/publication/online-scheduling-for-llm-inference-with-kv-cache-constraints/) 和 [arXiv:2502.07115](https://arxiv.org/abs/2502.07115)。
+   该工作将 KV-cache 容量作为 LLM 推理调度约束，说明并发场景下利用率、时延和内存压力是耦合的。因此，NPU 服务需求不应只用原始 tokens 除以峰值 token 能力来表示。
+
+4. [GPUStack Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/)。
+   该基准提供本文使用的参考 token 能力：Qwen3-30B-A3B 在 `128 input tokens` 和 `4 output tokens` 配置下达到 `15,040.15 total tokens/s`。
+
+5. [vLLM Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/)。
+   该文档提供在 Ascend 上通过 vLLM Ascend 服务 Qwen3 系列模型的实现背景，支撑本文对配置 NPU 集群和张量并行服务的假设。
