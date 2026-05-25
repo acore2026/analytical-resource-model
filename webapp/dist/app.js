@@ -102,7 +102,7 @@ function drawChart(rows) {
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = "#fbfcf8";
     ctx.fillRect(0, 0, width, height);
-    const pad = { left: 64, right: 32, top: 24, bottom: 44 };
+    const pad = { left: 86, right: 32, top: 24, bottom: 44 };
     const plotW = width - pad.left - pad.right;
     const plotH = height - pad.top - pad.bottom;
     const x = (index) => pad.left + (index / (rows.length - 1)) * plotW;
@@ -112,16 +112,23 @@ function drawChart(rows) {
     const maxUtil = Math.max(1.1, ...finiteUtils);
     ctx.strokeStyle = "#d7ddd3";
     ctx.lineWidth = 1;
-    ctx.fillStyle = "#5f6a61";
+    ctx.fillStyle = "#37423b";
     ctx.font = "18px Aptos, Segoe UI, sans-serif";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
     for (let i = 0; i <= 4; i += 1) {
         const gy = pad.top + (i / 4) * plotH;
         ctx.beginPath();
         ctx.moveTo(pad.left, gy);
         ctx.lineTo(width - pad.right, gy);
         ctx.stroke();
-        ctx.fillText(`${Math.round((1 - i / 4) * maxUtil * 100)}%`, 10, gy + 6);
+        ctx.fillText(`${Math.round((1 - i / 4) * maxUtil * 100)}%`, pad.left - 14, gy);
     }
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top);
+    ctx.lineTo(pad.left, height - pad.bottom);
+    ctx.stroke();
+    ctx.textBaseline = "alphabetic";
     const utilSeries = [
         { key: "cpuUtil", label: t("cpu"), color: "#3c8b4a" },
         { key: "networkUtil", label: t("network"), color: "#1769d1" },
@@ -188,7 +195,7 @@ function drawUserCountChart() {
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = "#fbfcf8";
     ctx.fillRect(0, 0, width, height);
-    const pad = { left: 64, right: 32, top: 24, bottom: 44 };
+    const pad = { left: 86, right: 32, top: 24, bottom: 44 };
     const plotW = width - pad.left - pad.right;
     const plotH = height - pad.top - pad.bottom;
     const x = (index) => pad.left + (index / (rows.length - 1)) * plotW;
@@ -197,17 +204,23 @@ function drawUserCountChart() {
     const maxUtil = Math.max(1.1, ...finiteUtils);
     ctx.strokeStyle = "#d7ddd3";
     ctx.lineWidth = 1;
-    ctx.fillStyle = "#5f6a61";
+    ctx.fillStyle = "#37423b";
     ctx.font = "18px Aptos, Segoe UI, sans-serif";
-    ctx.textAlign = "left";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
     for (let i = 0; i <= 4; i += 1) {
         const gy = pad.top + (i / 4) * plotH;
         ctx.beginPath();
         ctx.moveTo(pad.left, gy);
         ctx.lineTo(width - pad.right, gy);
         ctx.stroke();
-        ctx.fillText(`${Math.round((1 - i / 4) * maxUtil * 100)}%`, 10, gy + 6);
+        ctx.fillText(`${Math.round((1 - i / 4) * maxUtil * 100)}%`, pad.left - 14, gy);
     }
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top);
+    ctx.lineTo(pad.left, height - pad.bottom);
+    ctx.stroke();
+    ctx.textBaseline = "alphabetic";
     const utilSeries = [
         { key: "cpuUtil", label: t("cpu"), color: "#3c8b4a" },
         { key: "networkUtil", label: t("network"), color: "#1769d1" },
