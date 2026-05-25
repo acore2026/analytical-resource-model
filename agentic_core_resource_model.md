@@ -48,9 +48,7 @@ The baseline uses $N_{\mathrm{user}}=3.6\times10^6$ users and $2$ PDU sessions/u
 | Qwen3 token capacity | 15,040 tokens/s/replica |
 | Qwen3 tensor parallel size | 4 NPUs/replica |
 | Network capacity | 100 Gbps |
-| Nonlinear contention knee | 60% utilization |
-| Nonlinear contention overhead | 60% maximum overhead at full load |
-| Nonlinear curve power | 2.0 |
+| Nonlinear overhead model | Fixed load bands |
 | Non-intent agent CPU cost | 0.3 CPU-ms/request |
 | Intent agent CPU cost | 2.0 CPU-ms/request |
 | Non-intent agent latency | 1 ms/request |
@@ -90,27 +88,28 @@ $$
 
 Intent-bearing requests add $12\ \mathrm{KB/request}$ of control-plane metadata for intent containers, task metadata, tool invocation wrappers, and inter-agent status/tracing metadata.
 
-## Nonlinear Saturation Model
+## Piecewise Nonlinear Load Bands
 
-The model uses a nonlinear contention multiplier by default. Linear demand is calculated first, then a saturation multiplier is applied after the utilization knee.
+The model uses fixed operating bands to represent high-load contention. Linear demand is calculated first. The corresponding CPU, network, or Qwen3 serving load then selects one multiplier $M(u)$ from the table below.
 
-$$
-F(u) = 1 + \alpha \cdot \left(\frac{\max(0, \min(u,1)-u_{\mathrm{knee}})}{1-u_{\mathrm{knee}}}\right)^p
-$$
+| Linear load range | Operating state | Multiplier $M(u)$ |
+| ---: | --- | ---: |
+| $0\% \le u < 60\%$ | Normal | $1.00$ |
+| $60\% \le u < 80\%$ | Busy | $1.15$ |
+| $80\% \le u < 90\%$ | High load | $1.35$ |
+| $90\% \le u$ | Critical | $1.60$ |
 
-$$
-u_{\mathrm{knee}} = 0.60, \quad \alpha = 0.60, \quad p = 2.0
-$$
+This model is nonlinear because the effective cost changes by operating band instead of increasing with a single constant slope.
 
 ### Why Nonlinear Overhead Appears
 
-The nonlinear multiplier is an analytical sensitivity term. It represents the reduction of effective serving efficiency under high concurrency, not a change in the semantic workload of each request. Below the utilization knee, the model remains close to the transparent linear baseline. Above the knee, each additional request can consume more effective resource because the platform also spends capacity on contention, scheduling, memory movement, queueing, and runtime coordination.
+The nonlinear multiplier represents the reduction of effective serving efficiency under high concurrency, not a change in the semantic workload of each request. In normal operation the model stays equal to the transparent linear baseline. In busy, high-load, and critical operation, each request also consumes capacity through contention, scheduling, memory movement, queueing, and runtime coordination.
 
 | Resource area | Nonlinear factor | Effect represented in the model |
 | --- | --- | --- |
-| CPU | Scheduler overhead, lock contention, cache misses, memory access delay, serialization/deserialization, and state-store pressure. | Effective CPU-ms/request increases after the CPU utilization knee. |
+| CPU | Scheduler overhead, lock contention, cache misses, memory access delay, serialization/deserialization, and state-store pressure. | Effective CPU-ms/request increases in higher CPU load bands. |
 | Qwen3/NPU serving | Batching inefficiency, request routing, replica scheduling, runtime coordination, cross-replica overhead, and KV/cache memory pressure. | Raw token demand is converted into effective token demand before calculating replicas and NPUs. |
-| Network | Queueing, buffering, congestion-control behavior, retransmission risk, and additional control-plane coordination. | Effective bandwidth and network delay increase when network utilization approaches capacity. |
+| Network | Queueing, buffering, congestion-control behavior, retransmission risk, and additional control-plane coordination. | Effective bandwidth and network delay increase in higher network load bands. |
 | Latency | CPU queueing, NPU queueing, network queueing, and tail-latency amplification. | Mean, p95, and p99 latency rise faster as utilization approaches saturation. |
 
 KV/cache memory pressure is important for Qwen3 serving. During high concurrency, active requests keep key-value cache entries, runtime buffers, and scheduling state resident for longer periods. This reduces the effective throughput available for new requests even when the raw token profile per request is unchanged. Therefore, the model does not claim that Qwen3 produces more semantic tokens per request; it uses effective token demand to represent serving-system overhead around the model.
@@ -120,15 +119,15 @@ C_{\mathrm{cpu,linear}} = \sum_i \frac{\lambda_i}{\lambda_{\mathrm{total}}} C_{\
 $$
 
 $$
-D_{\mathrm{cpu}} = \frac{\lambda_{\mathrm{total}} C_{\mathrm{cpu,linear}} F(u_{\mathrm{cpu,linear}})}{1000}
+D_{\mathrm{cpu}} = \frac{\lambda_{\mathrm{total}} C_{\mathrm{cpu,linear}} M(u_{\mathrm{cpu,linear}})}{1000}
 $$
 
 $$
-B_{\mathrm{net}} = \frac{\lambda_{\mathrm{total}} B_{\mathrm{req,linear}} \cdot 8}{1,000,000} \cdot F(u_{\mathrm{net,linear}})
+B_{\mathrm{net}} = \frac{\lambda_{\mathrm{total}} B_{\mathrm{req,linear}} \cdot 8}{1,000,000} \cdot M(u_{\mathrm{net,linear}})
 $$
 
 $$
-T_{Q,\mathrm{eff}} = T_Q \cdot F(u_{Q,\mathrm{linear}})
+T_{Q,\mathrm{eff}} = T_Q \cdot M(u_{Q,\mathrm{linear}})
 $$
 
 $$
@@ -147,17 +146,17 @@ $$
 
 ## Analytical Results
 
-The table fixes the user population and event frequencies, then varies the percentage of all requests that carry intent. The visible results use the nonlinear saturation model.
+The table fixes the user population and event frequencies, then varies the percentage of all requests that carry intent. The visible results use the piecewise nonlinear load-band model.
 
 | Intent ratio | Total intent share | Intent rps | Qwen3 rps | Effective Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | Sized Qwen3 util | Required production NPUs | Network bandwidth | Mean latency | p95 latency | Status |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 0% | 0.0% | 0 | 0 | 0 | 156.9 | 61.3% | 53.402 Gbps | 0.0% | 0 | 6.779 Gbps | 22.9 ms | 95.3 ms | stable |
-| 1% | 1.0% | 1,043 | 104 | 13,768 | 158.8 | 62.0% | 57.140 Gbps | 45.8% | 8 | 6.879 Gbps | 23.0 ms | 98.3 ms | stable |
-| 5% | 5.0% | 5,215 | 522 | 69,587 | 167.1 | 65.3% | 72.092 Gbps | 66.1% | 28 | 7.280 Gbps | 23.8 ms | 116.5 ms | stable |
-| 10% | 10.0% | 10,430 | 1,043 | 139,173 | 178.9 | 69.9% | 90.783 Gbps | 66.1% | 56 | 7.780 Gbps | 25.0 ms | 141.3 ms | stable |
-| 20% | 20.0% | 20,860 | 2,086 | 281,646 | 208.7 | 81.5% | 128.164 Gbps | 69.4% | 108 | 8.782 Gbps | 30.5 ms | 299.8 ms | degraded |
-| 50% | 50.0% | 52,150 | 5,215 | 710,940 | 364.0 | 142.2% | 240.307 Gbps | 69.5% | 272 | 11.786 Gbps | unstable | unstable | unstable |
-| 100% | 100.0% | 104,300 | 10,430 | 1,427,134 | 534.6 | 208.8% | 427.213 Gbps | 69.8% | 544 | 16.792 Gbps | unstable | unstable | unstable |
+| 0% | 0.0% | 0 | 0 | 0 | 180.3 | 70.4% | 53.402 Gbps | 0.0% | 0 | 6.779 Gbps | 24.6 ms | 141.9 ms | degraded |
+| 1% | 1.0% | 1,043 | 104 | 13,768 | 182.4 | 71.2% | 57.140 Gbps | 45.8% | 8 | 6.879 Gbps | 24.9 ms | 148.1 ms | degraded |
+| 5% | 5.0% | 5,215 | 522 | 79,164 | 190.5 | 74.4% | 72.092 Gbps | 65.8% | 32 | 7.280 Gbps | 26.1 ms | 178.0 ms | degraded |
+| 10% | 10.0% | 10,430 | 1,043 | 158,327 | 200.7 | 78.4% | 90.783 Gbps | 65.8% | 64 | 7.780 Gbps | 28.1 ms | 231.8 ms | degraded |
+| 20% | 20.0% | 20,860 | 2,086 | 316,655 | 221.1 | 86.4% | 128.164 Gbps | 67.9% | 124 | 8.782 Gbps | 35.1 ms | 350.8 ms | high_risk |
+| 50% | 50.0% | 52,150 | 5,215 | 791,637 | 392.8 | 153.4% | 240.307 Gbps | 69.3% | 304 | 11.786 Gbps | unstable | unstable | unstable |
+| 100% | 100.0% | 104,300 | 10,430 | 1,583,274 | 534.6 | 208.8% | 427.213 Gbps | 69.7% | 604 | 16.792 Gbps | unstable | unstable | unstable |
 
 Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`. The Qwen3 sizing sensitivity sweep is available in `outputs/agentic_qwen3_sizing_sensitivity.csv`.
 
@@ -165,11 +164,11 @@ Qwen3 production sizing at $100\%$ intent ratio with the optimized $15,040\ \mat
 
 | Qwen3 invocation ratio | Qwen3 rps | Effective token demand | Required replicas | Required NPUs | Sized Qwen3 util |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 5% | 5,215 | 710,940 tokens/s | 68 | 272 | 69.5% |
-| 10% | 10,430 | 1,427,134 tokens/s | 136 | 544 | 69.8% |
-| 20% | 20,860 | 2,854,268 tokens/s | 272 | 1,088 | 69.8% |
-| 50% | 52,150 | 7,141,149 tokens/s | 679 | 2,716 | 69.9% |
-| 100% | 104,300 | 14,282,299 tokens/s | 1,357 | 5,428 | 70.0% |
+| 5% | 5,215 | 791,637 tokens/s | 76 | 304 | 69.3% |
+| 10% | 10,430 | 1,583,274 tokens/s | 151 | 604 | 69.7% |
+| 20% | 20,860 | 3,166,548 tokens/s | 301 | 1,204 | 69.9% |
+| 50% | 52,150 | 7,916,370 tokens/s | 752 | 3,008 | 70.0% |
+| 100% | 104,300 | 15,832,740 tokens/s | 1,504 | 6,016 | 70.0% |
 
 ![](outputs/agentic_resource_utilization.png)
 ![](outputs/agentic_latency.png)
@@ -180,7 +179,7 @@ The following user-count sensitivity figure fixes the intent ratio at $20\%$ and
 
 ## Interpretation
 
-With the nonlinear saturation model and $10\%$ Qwen3 invocation ratio, $100\%$ intent traffic requires $136$ Qwen3 replicas, or $544$ NPUs. The full-load scenario is CPU-unstable unless more CPU capacity, lower intent ratio, faster CPU-side processing, or admission control is added.
+With the piecewise nonlinear load-band model and $10\%$ Qwen3 invocation ratio, $100\%$ intent traffic requires the Qwen3 NPU count shown above. The full-load scenario is CPU-unstable unless more CPU capacity, lower intent ratio, faster CPU-side processing, or admission control is added.
 
 ## Model Boundary
 

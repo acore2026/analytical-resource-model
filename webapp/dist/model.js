@@ -9,14 +9,15 @@ function queueDelayMs(util, serviceMs) {
         return 0;
     return serviceMs * util / (1 - util);
 }
-function saturationMultiplier(num, load) {
-    const knee = clamp(num("nonlinearKnee") / 100, 0, 0.99);
-    const alpha = Math.max(0, num("nonlinearAlpha") / 100);
-    const power = Math.max(0.1, num("nonlinearPower"));
-    if (load <= knee)
+function piecewiseMultiplier(load) {
+    const boundedLoad = Math.max(0, load);
+    if (boundedLoad < 0.6)
         return 1;
-    const pressure = (clamp(load, 0, 1) - knee) / Math.max(0.001, 1 - knee);
-    return 1 + alpha * Math.pow(pressure, power);
+    if (boundedLoad < 0.8)
+        return 1.15;
+    if (boundedLoad < 0.9)
+        return 1.35;
+    return 1.6;
 }
 export function classifyStatus(util, degraded = 0.7, highRisk = 0.85) {
     if (util >= 1)
@@ -75,14 +76,14 @@ export function evaluate(num, intentRatioPercent = num("intentRatio"), userCount
     const cpuCores = Math.max(1, num("cpuCores"));
     const linearCpuCoreDemand = totalRps * linearCpuMsPerRequest / 1000;
     const linearCpuUtil = linearCpuCoreDemand / cpuCores;
-    const cpuMsPerRequest = linearCpuMsPerRequest * saturationMultiplier(num, linearCpuUtil);
+    const cpuMsPerRequest = linearCpuMsPerRequest * piecewiseMultiplier(linearCpuUtil);
     const cpuCoreDemand = totalRps * cpuMsPerRequest / 1000;
     const cpuUtil = cpuCoreDemand / cpuCores;
     const cpuDelay = queueDelayMs(cpuUtil, cpuMsPerRequest);
     const bandwidthKbPerRequest = baseBandwidthAvg + actualIntentShare * Math.max(0, num("intentBandwidthKb"));
     const linearNetworkGbps = totalRps * bandwidthKbPerRequest * 8 / 1000000;
     const linearNetworkUtil = linearNetworkGbps / Math.max(1, num("nicGbps"));
-    const networkGbps = linearNetworkGbps * saturationMultiplier(num, linearNetworkUtil);
+    const networkGbps = linearNetworkGbps * piecewiseMultiplier(linearNetworkUtil);
     const networkUtil = networkGbps / Math.max(1, num("nicGbps"));
     const networkDelay = queueDelayMs(networkUtil, 0.1);
     const qwen3InvocationRatio = clamp(num("qwen3InvocationRatio") / 100, 0, 1);
@@ -97,7 +98,7 @@ export function evaluate(num, intentRatioPercent = num("intentRatio"), userCount
     const linearRequiredQwen3Replicas = qwen3TokenDemand > 0 ? Math.ceil(qwen3TokenDemand / (qwen3TokenCapacity * qwen3TargetUtil)) : 0;
     const linearProductionCapacity = linearRequiredQwen3Replicas * qwen3TokenCapacity;
     const linearNpuUtil = linearProductionCapacity > 0 ? qwen3TokenDemand / linearProductionCapacity : 0;
-    const qwen3EffectiveTokenDemand = qwen3TokenDemand * saturationMultiplier(num, linearNpuUtil);
+    const qwen3EffectiveTokenDemand = qwen3TokenDemand * piecewiseMultiplier(linearNpuUtil);
     const requiredQwen3Replicas = qwen3EffectiveTokenDemand > 0 ? Math.ceil(qwen3EffectiveTokenDemand / (qwen3TokenCapacity * qwen3TargetUtil)) : 0;
     const requiredProductionNpus = requiredQwen3Replicas * Math.ceil(qwen3TensorParallel);
     const productionCapacity = requiredQwen3Replicas * qwen3TokenCapacity;

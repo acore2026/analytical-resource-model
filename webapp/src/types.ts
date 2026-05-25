@@ -20,9 +20,6 @@ export interface Baseline {
   nicGbps: number;
   ramGb: number;
   npuHbmPerNpuGb: number;
-  nonlinearKnee: number;
-  nonlinearAlpha: number;
-  nonlinearPower: number;
   qwen3InvocationRatio: number;
   qwen3InputTokens: number;
   qwen3OutputTokens: number;

@@ -7,13 +7,13 @@ from pathlib import Path
 
 
 def piecewise_multiplier(load: float) -> float:
-    if load < 0.50:
+    if load < 0.60:
         return 1.00
-    if load < 0.70:
-        return 1.10
-    if load < 0.85:
-        return 1.30
-    return 1.55
+    if load < 0.80:
+        return 1.15
+    if load < 0.90:
+        return 1.35
+    return 1.60
 
 
 def saturation_multiplier(load: float, knee: float = 0.60, alpha: float = 0.60, power: float = 2.0) -> float:
@@ -39,7 +39,9 @@ def main() -> None:
     plt.plot(x, linear, linewidth=2.6, label="Linear model", color="#1769d1")
     plt.plot(x, saturation, linewidth=3.0, label="Saturation curve", color="#d66a00")
     plt.plot(x, piecewise, linewidth=2.6, label="Piecewise tiers", color="#3c8b4a")
-    plt.axvline(60, color="#7b827c", linestyle="--", linewidth=1.2, label="Saturation knee")
+    plt.axvline(60, color="#7b827c", linestyle="--", linewidth=1.2, label="Band boundary")
+    plt.axvline(80, color="#7b827c", linestyle="--", linewidth=1.0)
+    plt.axvline(90, color="#7b827c", linestyle="--", linewidth=1.0)
     plt.xlabel("Normalized load or intent ratio (%)")
     plt.ylabel("Normalized resource demand\n(linear = 1.0 at full load)")
     plt.title("Linear and Nonlinear Resource Demand Models")

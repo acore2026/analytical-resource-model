@@ -150,18 +150,6 @@
               <input id="npuHbmPerNpuGb" type="number" min="1" step="1" value="32">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="nonlinearKnee">Nonlinear knee</span> <span class="unit">(%)</span><span class="help" data-tip-key="nonlinearKneeTip" data-tip="Utilization point where contention overhead begins. The default 60% keeps low-load behavior close to linear.">?</span></span>
-              <input id="nonlinearKnee" type="number" min="0" max="99" step="1" value="60">
-            </label>
-            <label class="field compact">
-              <span class="label-line"><span data-i18n="nonlinearAlpha">Nonlinear overhead</span> <span class="unit">(%)</span><span class="help" data-tip-key="nonlinearAlphaTip" data-tip="Maximum extra resource overhead at full load. The default 60% means cost can reach 1.6x near saturation.">?</span></span>
-              <input id="nonlinearAlpha" type="number" min="0" step="5" value="60">
-            </label>
-            <label class="field compact">
-              <span class="label-line"><span data-i18n="nonlinearPower">Nonlinear curve power</span> <span class="unit">(exponent)</span><span class="help" data-tip-key="nonlinearPowerTip" data-tip="Shape of the nonlinear curve after the knee. The default 2.0 makes overhead grow smoothly.">?</span></span>
-              <input id="nonlinearPower" type="number" min="0.1" step="0.1" value="2">
-            </label>
-            <label class="field compact">
               <span class="label-line"><span data-i18n="qwen3InvocationRatio">Qwen3 invocation ratio</span> <span class="unit">(%)</span><span class="help" data-tip-key="qwen3InvocationRatioTip" data-tip="Percentage of intent requests that need Qwen3-30B-A3B. The rest use lightweight intent parsing and tool selection.">?</span></span>
               <input id="qwen3InvocationRatio" type="number" min="0" max="100" step="1" value="10">
             </label>
@@ -186,6 +174,9 @@
               <input id="qwen3TargetUtil" type="number" min="1" max="100" step="1" value="70">
             </label>
           </div>
+          <p class="source-note band-note">
+            <span data-i18n="loadBandNote">Nonlinear overhead uses fixed load bands: normal below 60%, busy at 60-80%, high load at 80-90%, and critical above 90%.</span>
+          </p>
 
           <div class="panel-title secondary">
             <span class="panel-code">04</span>
@@ -260,7 +251,7 @@
               <span class="panel-code">05</span>
               <h2 data-i18n="intentSweep">Intent Sweep</h2>
             </div>
-            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share across all request types. Results use a nonlinear contention multiplier after 60% load. Left Y-axis: CPU and network utilization. Right Y-axis: required Qwen3 NPUs.</p>
+            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share across all request types. Results use fixed nonlinear load bands. Left Y-axis: CPU and network utilization. Right Y-axis: required Qwen3 NPUs.</p>
             <div class="chart-frame">
               <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU/Network util (%) · Qwen3 NPUs</div>
               <canvas id="sweepChart" width="920" height="360" aria-label="Intent sweep chart"></canvas>
@@ -273,7 +264,7 @@
               <span class="panel-code">06</span>
               <h2 data-i18n="userCountSweep">User Count Sensitivity</h2>
             </div>
-            <p class="chart-description" data-i18n="userCountSweepDescription">Intent ratio is fixed at 20%. The nonlinear model adds contention overhead after 60% load; Qwen3 line shows required NPU count.</p>
+            <p class="chart-description" data-i18n="userCountSweepDescription">Intent ratio is fixed at 20%. Fixed nonlinear load bands add overhead as the system moves from normal to busy, high-load, and critical operation; Qwen3 line shows required NPU count.</p>
             <div class="chart-frame">
               <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU/Network util (%) · Qwen3 NPUs</div>
               <canvas id="userCountChart" width="920" height="360" aria-label="User count sensitivity chart"></canvas>

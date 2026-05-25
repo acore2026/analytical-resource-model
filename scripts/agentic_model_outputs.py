@@ -69,7 +69,7 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
     ax_util.set_xlabel("Intent ratio across all requests (%)")
     ax_util.set_ylabel("CPU / Network utilization (%)")
     ax_npu.set_ylabel("Required Qwen3 NPUs")
-    ax_util.set_title("Nonlinear utilization and required Qwen3 NPUs vs. intent ratio")
+    ax_util.set_title("Piecewise nonlinear utilization and required Qwen3 NPUs vs. intent ratio")
     ax_util.grid(True, alpha=0.3)
     lines = [cpu_line, net_line, npu_line]
     labels = [line.get_label() for line in lines]
@@ -84,7 +84,7 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
     plt.plot(x, finite_series("p99_latency_ms"), marker="^", color="#d66a00", label="p99")
     plt.xlabel("Intent ratio across all requests (%)")
     plt.ylabel("Latency (ms)")
-    plt.title("Nonlinear control-plane latency vs. intent ratio")
+    plt.title("Piecewise nonlinear control-plane latency vs. intent ratio")
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()
@@ -132,7 +132,7 @@ def maybe_write_user_count_plot(config: ModelConfig, out_dir: Path) -> None:
     ax_util.set_xlabel("User count (million users)")
     ax_util.set_ylabel("CPU / Network utilization (%)")
     ax_npu.set_ylabel("Required Qwen3 NPUs")
-    ax_util.set_title("Nonlinear utilization and required Qwen3 NPUs vs. user count (20% intent)")
+    ax_util.set_title("Piecewise nonlinear utilization and required Qwen3 NPUs vs. user count (20% intent)")
     ax_util.grid(True, alpha=0.3)
     lines = [cpu_line, net_line, npu_line]
     labels = [line.get_label() for line in lines]

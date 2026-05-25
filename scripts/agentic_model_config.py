@@ -45,9 +45,6 @@ class ModelConfig:
     qwen3_latency_ms: float = 8.0
     qwen3_active_hbm_mb: float = 4.0
     active_context_ram_kb: float = 128.0
-    nonlinear_knee: float = 0.60
-    nonlinear_alpha: float = 0.60
-    nonlinear_power: float = 2.0
 
 
 EVENTS: List[EventType] = [

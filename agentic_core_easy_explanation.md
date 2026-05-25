@@ -54,16 +54,19 @@ $$
 
 ## Step 5: Add Nonlinear High-Load Overhead
 
-The model applies a saturation multiplier after $60\%$ utilization:
+The model uses easy operating bands instead of a complex curve:
 
-$$
-F(u) = 1 + 0.60 \cdot \left(\frac{\max(0, \min(u,1)-0.60)}{0.40}\right)^2
-$$
+| Load range | State | Multiplier |
+| ---: | --- | ---: |
+| $0\% \le u < 60\%$ | Normal | $1.00$ |
+| $60\% \le u < 80\%$ | Busy | $1.15$ |
+| $80\% \le u < 90\%$ | High load | $1.35$ |
+| $90\% \le u$ | Critical | $1.60$ |
 
 For the default full-intent Qwen3 case:
 
 $$
-T_{Q,\mathrm{eff}} = 1,427,134\ \mathrm{tokens/s}
+T_{Q,\mathrm{eff}} = 1,583,274\ \mathrm{tokens/s}
 $$
 
 ## Step 6: Calculate Production NPUs
@@ -77,11 +80,11 @@ $$
 Required replicas and NPUs are:
 
 $$
-R_Q = \left\lceil \frac{1,427,134}{15,040 \cdot 70\%} \right\rceil = 136
+R_Q = \left\lceil \frac{1,583,274}{15,040 \cdot 70\%} \right\rceil = 151
 $$
 
 $$
-N_Q = 136 \cdot 4 = 544\ \mathrm{NPUs}
+N_Q = 151 \cdot 4 = 604\ \mathrm{NPUs}
 $$
 
 ## Main Message
@@ -91,7 +94,7 @@ For the baseline production scenario:
 - User population is $3.6$ million.
 - At $100\%$ intent ratio, intent traffic is $104,300$ requests/s.
 - $10\%$ of intent requests invoke Qwen3.
-- Effective Qwen3 demand after nonlinear overhead is $1,427,134$ tokens/s.
-- Required production capacity is $544$ NPUs.
+- Effective Qwen3 demand after nonlinear overhead is $1,583,274$ tokens/s.
+- Required production capacity is $604$ NPUs.
 
 This is the core logic of the analysis.

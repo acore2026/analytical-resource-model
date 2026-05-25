@@ -1,6 +1,6 @@
 # Nonlinear Model Options for Resource Analysis
 
-This document compares candidate extensions for modeling non-linear resource growth in the agentic 6G core resource model. It is intended for model-selection review only. The current analytical model and web calculator remain unchanged until one option is selected.
+This document compares candidate extensions for modeling non-linear resource growth in the agentic 6G core resource model. The selected model for the analytical report and web calculator is Option 3, the piecewise load-band model.
 
 ![Linear and nonlinear resource model comparison](outputs/nonlinear_model_options.png)
 
@@ -77,15 +77,15 @@ The piecewise model assigns a fixed multiplier for each load region.
 
 ```text
 F_piecewise(L) =
-  1.00, if L < 0.50
-  1.10, if 0.50 <= L < 0.70
-  1.30, if 0.70 <= L < 0.85
-  1.55, if L >= 0.85
+  1.00, if L < 0.60
+  1.15, if 0.60 <= L < 0.80
+  1.35, if 0.80 <= L < 0.90
+  1.60, if L >= 0.90
 
 D_piecewise = L * F_piecewise(L)
 ```
 
-This option is easy to explain verbally because each load band has a defined multiplier. It is less smooth than the saturation curve and introduces visible changes at tier boundaries.
+This option is selected because it is easy to explain verbally: normal, busy, high-load, and critical operation each have one defined multiplier. It is less smooth than the saturation curve and introduces visible changes at tier boundaries.
 
 ## Comparison
 
@@ -93,7 +93,7 @@ This option is easy to explain verbally because each load band has a defined mul
 | --- | --- | --- | --- |
 | Linear | Most transparent and easiest to reproduce. | Understates high-load overhead. | Baseline capacity model. |
 | Saturation curve | Smooth and close to real performance degradation. | Requires selecting `knee`, `alpha`, and `power`. | Official report figure and sensitivity analysis. |
-| Piecewise tiers | Easy to explain with load bands. | Tier boundaries are artificial. | Management summary or coarse planning. |
+| Piecewise tiers | Easy to explain with load bands. | Tier boundaries are artificial. | Selected model for the report and calculator. |
 
 ## Selection Criteria
 
@@ -105,4 +105,4 @@ The final model should be selected based on the intended message:
 | Show realistic high-load curvature while keeping formulas compact. | Saturation curve |
 | Explain operational bands to non-technical reviewers. | Piecewise tiers |
 
-For the agentic core resource paper, the saturation curve is the strongest candidate if the objective is to show realistic high-concurrency behavior without introducing complex simulation.
+For the agentic core resource paper, the selected model is piecewise tiers because the formulas are simple enough for management review while still showing nonlinear high-load behavior.

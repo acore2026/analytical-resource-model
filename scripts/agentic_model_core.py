@@ -7,6 +7,13 @@ from typing import Dict
 
 from agentic_model_config import EVENTS, EventType, ModelConfig
 
+LOAD_BANDS = (
+    (0.60, 1.00),
+    (0.80, 1.15),
+    (0.90, 1.35),
+    (float("inf"), 1.60),
+)
+
 def event_rps(config: ModelConfig, event: EventType) -> float:
     return config.user_count * event.per_user_per_hour / 3600.0
 
@@ -24,13 +31,13 @@ def queue_delay_ms(util: float, service_ms: float) -> float:
     return service_ms * util / (1.0 - util)
 
 
-def saturation_multiplier(config: ModelConfig, load: float) -> float:
-    """Contention overhead applied after the configured utilization knee."""
-    if load <= config.nonlinear_knee:
-        return 1.0
-    denominator = max(0.001, 1.0 - config.nonlinear_knee)
-    pressure = max(0.0, min(load, 1.0) - config.nonlinear_knee) / denominator
-    return 1.0 + config.nonlinear_alpha * math.pow(pressure, config.nonlinear_power)
+def piecewise_multiplier(load: float) -> float:
+    """Contention overhead by operating load band."""
+    bounded_load = max(0.0, load)
+    for upper_bound, multiplier in LOAD_BANDS:
+        if bounded_load < upper_bound:
+            return multiplier
+    return LOAD_BANDS[-1][1]
 
 
 def status(util: float, degraded: float, high_risk: float) -> str:
@@ -82,7 +89,7 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
         if linear_qwen3_production_token_capacity_tps
         else 0.0
     )
-    qwen3_nonlinear_multiplier = saturation_multiplier(config, linear_npu_util)
+    qwen3_nonlinear_multiplier = piecewise_multiplier(linear_npu_util)
     qwen3_effective_token_demand_tps = qwen3_token_demand_tps * qwen3_nonlinear_multiplier
     required_qwen3_replicas = (
         math.ceil(qwen3_effective_token_demand_tps / (
@@ -102,7 +109,7 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     linear_cpu_ms_per_request = base_cpu_ms_avg + agent_cpu_ms_avg
     linear_cpu_core_demand = rps_total * linear_cpu_ms_per_request / 1000.0
     linear_cpu_util = linear_cpu_core_demand / config.cpu_cores
-    cpu_nonlinear_multiplier = saturation_multiplier(config, linear_cpu_util)
+    cpu_nonlinear_multiplier = piecewise_multiplier(linear_cpu_util)
     cpu_ms_per_request = linear_cpu_ms_per_request * cpu_nonlinear_multiplier
     cpu_core_demand = rps_total * cpu_ms_per_request / 1000.0
     cpu_util = cpu_core_demand / config.cpu_cores
@@ -115,7 +122,7 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     )
     linear_bandwidth_gbps = rps_total * bandwidth_kb_per_request * 8.0 / 1_000_000.0
     linear_network_util = linear_bandwidth_gbps / config.nic_gbps
-    network_nonlinear_multiplier = saturation_multiplier(config, linear_network_util)
+    network_nonlinear_multiplier = piecewise_multiplier(linear_network_util)
     bandwidth_gbps = linear_bandwidth_gbps * network_nonlinear_multiplier
     network_util = bandwidth_gbps / config.nic_gbps
     network_delay = queue_delay_ms(network_util, 0.1)
