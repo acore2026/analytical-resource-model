@@ -66,14 +66,12 @@ function updateSummary(result) {
     setBar("npuBar", result.npuUtil, result.npuStatus);
     setBar("netBar", result.networkUtil, result.netStatus);
     mustGet("meanLatency").textContent = `${fmt(result.meanLatency, 1)} ms`;
-    mustGet("p95Latency").textContent = `${fmt(result.p95Latency, 1)} ms`;
-    mustGet("p99Latency").textContent = `${fmt(result.p99Latency, 1)} ms`;
     const stateDot = mustGet("stateDot");
     const stateText = mustGet("stateText");
     stateDot.style.background = colorForStatus(result.systemStatus);
     stateDot.style.boxShadow = `0 0 20px ${colorForStatus(result.systemStatus)}`;
     stateText.textContent = statusText(result.systemStatus);
-    mustGet("bottleneckNote").textContent = `${t("bottleneck")}: ${bottleneckLabel(result)}. ${t("intentTraffic")} ${fmt(result.intentRps, 0)} req/s; Qwen3 ${fmt(result.qwen3RequestRps, 0)} req/s / ${fmt(result.qwen3EffectiveTokenDemand, 0)} ${t("effectiveTokens")}; ${t("qwen3ClusterUtil")} ${pct(result.npuUtil)}.`;
+    mustGet("bottleneckNote").textContent = `${t("bottleneck")}: ${bottleneckLabel(result)}. ${t("intentTraffic")} ${fmt(result.intentRps, 0)} req/s; Qwen3 ${fmt(result.qwen3RequestRps, 0)} req/s / ${fmt(result.qwen3EffectiveTokenDemand, 0)} ${t("effectiveTokens")}; ${t("qwen3ClusterUtil")} ${pct(result.npuUtil)}. ${t("latencyNoQueueNote")}`;
     updateEventTable(result);
 }
 function updateTable(rows) {

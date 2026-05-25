@@ -92,12 +92,21 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
     plt.close()
 
     plt.figure(figsize=(7, 4.2))
-    plt.plot(x, finite_series("mean_latency_ms"), marker="o", markevery=10, color="#2a7f3e", label="mean")
-    plt.plot(x, finite_series("p95_latency_ms"), marker="s", markevery=10, color="#1f77b4", label="p95")
-    plt.plot(x, finite_series("p99_latency_ms"), marker="^", markevery=10, color="#d66a00", label="p99")
+    plt.plot(x, finite_series("mean_latency_ms"), marker="o", markevery=10, color="#2a7f3e", label="mean, no queueing")
     plt.xlabel("Intent ratio across all requests (%)")
     plt.ylabel("Latency (ms)")
-    plt.title("Convex nonlinear control-plane latency vs. intent ratio")
+    plt.title("No-queue control-plane latency vs. intent ratio")
+    plt.text(
+        0.99,
+        0.04,
+        "Queueing delay is excluded; overload is shown by utilization status.",
+        transform=plt.gca().transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=8,
+        color="#5f6661",
+        bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": "#5f6661", "alpha": 0.72},
+    )
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()

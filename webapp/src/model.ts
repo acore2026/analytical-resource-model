@@ -8,12 +8,6 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function queueDelayMs(util: number, serviceMs: number): number {
-  if (util >= 1) return Infinity;
-  if (util <= 0) return 0;
-  return serviceMs * util / (1 - util);
-}
-
 function effectiveLoadMultiplier(load: number): number {
   const boundedLoad = Math.max(0, load);
   if (boundedLoad === 0) return 1;
@@ -87,7 +81,6 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
   const cpuMsPerRequest = linearCpuMsPerRequest * cpuNonlinearMultiplier;
   const cpuCoreDemand = totalRps * cpuMsPerRequest / 1000;
   const cpuUtil = cpuCoreDemand / cpuCores;
-  const cpuDelay = queueDelayMs(cpuUtil, cpuMsPerRequest);
 
   const bandwidthKbPerRequest = baseBandwidthAvg + actualIntentShare * Math.max(0, num("intentBandwidthKb"));
   const linearNetworkGbps = totalRps * bandwidthKbPerRequest * 8 / 1000000;
@@ -95,7 +88,6 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
   const networkNonlinearMultiplier = effectiveLoadMultiplier(linearNetworkUtil);
   const networkGbps = linearNetworkGbps * networkNonlinearMultiplier;
   const networkUtil = networkGbps / Math.max(1, num("nicGbps"));
-  const networkDelay = queueDelayMs(networkUtil, 0.1);
 
   const qwen3InvocationRatio = clamp(num("qwen3InvocationRatio") / 100, 0, 1);
   const qwen3InputTokens = Math.max(1, num("qwen3InputTokens"));
@@ -112,8 +104,7 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
   const qwen3NonlinearMultiplier = effectiveLoadMultiplier(qwen3RawUtil);
   const qwen3EffectiveTokenDemand = qwen3TokenDemand * qwen3NonlinearMultiplier;
   const npuUtil = qwen3ClusterCapacity > 0 ? qwen3EffectiveTokenDemand / qwen3ClusterCapacity : 0;
-  const npuQueueDelay = qwen3ClusterCapacity > 0 ? queueDelayMs(npuUtil, 1000 / qwen3ClusterCapacity) : 0;
-  const qwen3Latency = Math.max(0, num("qwen3LatencyMs")) + npuQueueDelay;
+  const qwen3Latency = Math.max(0, num("qwen3LatencyMs"));
 
   const activeQwen3Requests = qwen3RequestRps * Math.max(0, num("qwen3LatencyMs")) / 1000;
   const activeNpuCount = qwen3AvailableReplicas * qwen3TensorParallel;
@@ -132,27 +123,16 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
   for (const event of events) {
     const eventShare = totalRps > 0 ? event.rps / totalRps : 0;
     const eventIntentShare = intentRatio;
-    const nonIntentLatency = event.baseLatencyMs + 1 + cpuDelay + networkDelay;
+    const nonIntentLatency = event.baseLatencyMs + 1;
     const intentLatency = event.baseLatencyMs
       + 4
       + Math.max(0, num("intentCpu"))
-      + qwen3InvocationRatio * qwen3Latency
-      + cpuDelay
-      + networkDelay;
+      + qwen3InvocationRatio * qwen3Latency;
     meanLatency += eventShare * ((1 - eventIntentShare) * nonIntentLatency + eventIntentShare * intentLatency);
   }
 
   const bottleneckUtil = Math.max(cpuUtil, npuUtil, networkUtil);
-  const unstable = cpuUtil >= 1 || npuUtil >= 1 || networkUtil >= 1 || !Number.isFinite(meanLatency);
-  let p95Latency = Infinity;
-  let p99Latency = Infinity;
-  if (!unstable) {
-    const tailAmplifier = 1 + 2 * bottleneckUtil / Math.max(0.001, 1 - bottleneckUtil);
-    p95Latency = meanLatency * Math.min(tailAmplifier, 10);
-    p99Latency = meanLatency * Math.min(tailAmplifier * 1.35, 15);
-  } else {
-    meanLatency = Infinity;
-  }
+  const unstable = cpuUtil >= 1 || npuUtil >= 1 || networkUtil >= 1;
 
   const systemStatus: SystemStatus = unstable ? "unstable" : classifyStatus(bottleneckUtil);
   return {
@@ -181,8 +161,6 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
     networkNonlinearMultiplier,
     networkUtil,
     meanLatency,
-    p95Latency,
-    p99Latency,
     systemStatus,
     cpuStatus: classifyStatus(cpuUtil),
     npuStatus: classifyStatus(npuUtil),

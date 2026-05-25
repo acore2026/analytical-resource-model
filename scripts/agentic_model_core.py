@@ -18,17 +18,8 @@ def total_rps(config: ModelConfig) -> float:
     return sum(event_rps(config, event) for event in EVENTS)
 
 
-def queue_delay_ms(util: float, service_ms: float) -> float:
-    """Simple M/M/1-inspired delay term for sensitivity analysis."""
-    if util >= 1.0:
-        return math.inf
-    if util <= 0.0:
-        return 0.0
-    return service_ms * util / (1.0 - util)
-
-
 def convex_effective_load(load: float, alpha: float = NONLINEAR_ALPHA) -> float:
-    """Convex overhead for contention, queueing, and memory-pressure sensitivity."""
+    """Convex overhead for contention and memory-pressure sensitivity."""
     bounded_load = max(0.0, load)
     return bounded_load + alpha * bounded_load * bounded_load
 
@@ -101,7 +92,6 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     cpu_ms_per_request = linear_cpu_ms_per_request * cpu_nonlinear_multiplier
     cpu_core_demand = rps_total * cpu_ms_per_request / 1000.0
     cpu_util = cpu_core_demand / config.cpu_cores
-    cpu_delay = queue_delay_ms(cpu_util, cpu_ms_per_request)
 
     base_bandwidth_kb_avg = weighted_average(config, "base_bandwidth_kb")
     bandwidth_kb_per_request = (
@@ -113,19 +103,13 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     network_nonlinear_multiplier = convex_multiplier(linear_network_util)
     bandwidth_gbps = linear_bandwidth_gbps * network_nonlinear_multiplier
     network_util = bandwidth_gbps / config.nic_gbps
-    network_delay = queue_delay_ms(network_util, 0.1)
 
     npu_util = (
         qwen3_effective_token_demand_tps / qwen3_cluster_token_capacity_tps
         if qwen3_cluster_token_capacity_tps
         else 0.0
     )
-    npu_queue_delay = (
-        queue_delay_ms(npu_util, 1_000.0 / qwen3_cluster_token_capacity_tps)
-        if qwen3_cluster_token_capacity_tps
-        else 0.0
-    )
-    qwen3_inference_latency = config.qwen3_latency_ms + npu_queue_delay
+    qwen3_inference_latency = config.qwen3_latency_ms
 
     active_qwen3_requests = qwen3_request_rps * config.qwen3_latency_ms / 1000.0
     npu_hbm_gb = 0.0
@@ -149,41 +133,26 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     memory_traffic_gbps = rps_total * memory_traffic_kb_per_request * 8.0 / 1_000_000.0
 
     mean_latency = 0.0
-    unstable = cpu_util >= 1.0 or npu_util >= 1.0 or network_util >= 1.0
     for event in EVENTS:
         event_share = event_rps(config, event) / rps_total if rps_total > 0 else 0.0
         event_intent_share = intent_ratio
         non_intent_latency = (
             event.base_latency_ms
             + config.non_intent_agent_latency_ms
-            + cpu_delay
-            + network_delay
         )
         intent_latency = (
             event.base_latency_ms
             + config.intent_agent_fixed_latency_ms
             + config.intent_agent_cpu_ms
             + config.qwen3_invocation_ratio * qwen3_inference_latency
-            + cpu_delay
-            + network_delay
         )
-        if math.isinf(intent_latency):
-            unstable = True
-
         mean_latency += event_share * (
             (1.0 - event_intent_share) * non_intent_latency
             + event_intent_share * intent_latency
         )
 
     bottleneck_util = max(cpu_util, npu_util, network_util)
-    if unstable:
-        mean_latency = math.inf
-        p95_latency = math.inf
-        p99_latency = math.inf
-    else:
-        tail_amplifier = 1.0 + 2.0 * bottleneck_util / max(0.001, 1.0 - bottleneck_util)
-        p95_latency = mean_latency * min(tail_amplifier, 10.0)
-        p99_latency = mean_latency * min(tail_amplifier * 1.35, 15.0)
+    overloaded = cpu_util >= 1.0 or npu_util >= 1.0 or network_util >= 1.0
 
     result: Dict[str, float | str] = {
         "user_count": config.user_count,
@@ -229,9 +198,7 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
         "network_utilization": network_util,
         "network_status": status(network_util, 0.70, 0.85),
         "mean_latency_ms": mean_latency,
-        "p95_latency_ms": p95_latency,
-        "p99_latency_ms": p99_latency,
-        "system_status": "unstable" if unstable else status(bottleneck_util, 0.70, 0.85),
+        "system_status": "unstable" if overloaded else status(bottleneck_util, 0.70, 0.85),
     }
     for event in EVENTS:
         result[f"{event.name}_per_user_per_hour"] = event.per_user_per_hour

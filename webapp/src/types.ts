@@ -73,8 +73,6 @@ export interface Result {
   networkNonlinearMultiplier: number;
   networkUtil: number;
   meanLatency: number;
-  p95Latency: number;
-  p99Latency: number;
   systemStatus: SystemStatus;
   cpuStatus: SystemStatus;
   npuStatus: SystemStatus;

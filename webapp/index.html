@@ -193,7 +193,7 @@
               <input id="intentCpu" type="number" min="0" step="0.1" value="2.0">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="qwen3Latency">Qwen3 service time</span> <span class="unit">(ms/request)</span><span class="help" data-tip-key="qwen3LatencyTip" data-tip="Per-request Qwen3 service time for complex intents before queueing delay.">?</span></span>
+              <span class="label-line"><span data-i18n="qwen3Latency">Qwen3 service time</span> <span class="unit">(ms/request)</span><span class="help" data-tip-key="qwen3LatencyTip" data-tip="Per-request Qwen3 service time for complex intents. Queueing delay is excluded from the primary model.">?</span></span>
               <input id="qwen3LatencyMs" type="number" min="0" step="0.5" value="8">
             </label>
             <label class="field compact">
@@ -233,10 +233,6 @@
             <div class="latency-main">
               <span data-i18n="meanLatencyMetric">Mean latency (ms)</span>
               <strong id="meanLatency">--</strong>
-            </div>
-            <div class="latency-pair">
-              <span><span data-i18n="p95LatencyMetric">p95 latency (ms)</span> <strong id="p95Latency">--</strong></span>
-              <span><span data-i18n="p99LatencyMetric">p99 latency (ms)</span> <strong id="p99Latency">--</strong></span>
             </div>
             <div class="latency-note" id="bottleneckNote">Waiting for input.</div>
           </div>
