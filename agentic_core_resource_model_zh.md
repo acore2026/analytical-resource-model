@@ -10,9 +10,13 @@
 
 令 $N_{\mathrm{user}}$ 表示注册用户数， $f_i$ 表示单个用户每小时触发事件 $i$ 的次数。
 
+单类事件的请求速率由用户数乘以单用户每小时事件频率得到，再从每小时换算为每秒。
+
 $$
 \lambda_i = \frac{N_{\mathrm{user}} \cdot f_i}{3600}
 $$
+
+总控制面请求速率是所有建模流程请求速率的总和。
 
 $$
 \lambda_{\mathrm{total}} = \sum_i \lambda_i
@@ -62,13 +66,19 @@ $CPU\text{-}ms$ 表示一个 CPU 核被占用一毫秒。例如， $2\ CPU\text{
 
 [GPUStack 的 Qwen3-30B-A3B on Ascend 910B 基准](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/)报告，在 `128 input tokens` 和 `4 output tokens` 配置下结果为 `15,040.15 total tokens/s`。[vLLM-Ascend 文档](https://docs.vllm.ai/projects/ascend/en/v0.18.0/)包含 Qwen3-30B-A3B 指引；对于 32 GB NPU 卡，模型采用 tensor parallel size $TP_Q=4$。
 
+意图请求速率等于总请求速率乘以意图比例。
+
 $$
 \lambda_I = \rho_I \cdot \lambda_{\mathrm{total}}
 $$
 
+只有配置比例的意图请求会调用 Qwen3，该比例记为 $r_Q$。
+
 $$
 \lambda_Q = \lambda_I \cdot r_Q
 $$
+
+原始 Qwen3 token 需求等于 Qwen3 请求速率乘以输入和输出 token 配置之和。
 
 $$
 T_Q = \lambda_Q \cdot \left(L_{\mathrm{in}} + L_{\mathrm{out}}\right)
@@ -76,9 +86,13 @@ $$
 
 用于 Qwen3 服务的 NPU 集群包含 $N_Q=128$ 张 NPU。可用 Qwen3 副本数和 token 容量为：
 
+可用 Qwen3 服务副本数受张量并行规模限制，因为一个副本需要占用 $TP_Q$ 张 NPU。
+
 $$
 R_{Q,\mathrm{avail}} = \left\lfloor \frac{N_Q}{TP_Q} \right\rfloor
 $$
+
+总 Qwen3 token 能力等于可用副本数乘以单副本 token 能力 $\mu_Q$。
 
 $$
 C_Q = R_{Q,\mathrm{avail}} \cdot \mu_Q
@@ -88,9 +102,13 @@ $$
 
 对于非意图请求，增量 Agentic CPU 成本为 $0.30\ CPU\text{-}ms/request$。对于携带意图的请求，CPU 侧 Agent 工作量为 $2.00\ CPU\text{-}ms/request$，不包含 Qwen3 推理。
 
+对于不调用 Qwen3、只使用轻量 Agent 逻辑处理的意图请求，模型将 Agent 侧时延表示为固定意图 Agent 时延加上请求路径中的 CPU 侧 Agent 工作量。
+
 $$
 D_{\mathrm{intent,light}} = 4\ \mathrm{ms} + 2\ \mathrm{ms}
 $$
+
+对于调用 Qwen3 的意图请求，基础 Qwen3 服务时间建模为排队前 $8\ \mathrm{ms/request}$。当 NPU 利用率升高时，排队时延会在后续时延模型中叠加。
 
 $$
 D_{Q,\mathrm{service}} = 8\ \mathrm{ms/request}

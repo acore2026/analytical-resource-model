@@ -10,9 +10,13 @@ Roaming, AF-originated intent, and SRF routing cost are excluded. The model is a
 
 Traffic is derived from user population and per-user event frequency. Let $N_{\mathrm{user}}$ be the number of registered users, and let $f_i$ be how many times one user triggers event $i$ per hour.
 
+The per-event request rate is calculated by multiplying the user population by the per-user hourly event frequency, then converting from per hour to per second.
+
 $$
 \lambda_i = \frac{N_{\mathrm{user}} \cdot f_i}{3600}
 $$
+
+The total control-plane request rate is the sum of all modeled procedure rates.
 
 $$
 \lambda_{\mathrm{total}} = \sum_i \lambda_i
@@ -62,13 +66,19 @@ $CPU\text{-}ms$ means one CPU core occupied for one millisecond. For example, $2
 
 [GPUStack's Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/) reports `15,040.15 total tokens/s` for `128 input tokens` and `4 output tokens`. The [vLLM-Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/) includes Qwen3-30B-A3B guidance; for 32 GB NPU cards, the model uses tensor parallel size $TP_Q=4$.
 
+The intent request rate is the total request rate multiplied by the intent ratio.
+
 $$
 \lambda_I = \rho_I \cdot \lambda_{\mathrm{total}}
 $$
 
+Only a configured fraction of intent requests invoke Qwen3. That fraction is denoted by $r_Q$.
+
 $$
 \lambda_Q = \lambda_I \cdot r_Q
 $$
+
+The raw Qwen3 token demand equals the Qwen3 request rate multiplied by the input-plus-output token profile.
 
 $$
 T_Q = \lambda_Q \cdot \left(L_{\mathrm{in}} + L_{\mathrm{out}}\right)
@@ -76,9 +86,13 @@ $$
 
 The configured NPU cluster for Qwen3 serving has $N_Q=128$ NPUs. The number of available Qwen3 replicas and token capacity are:
 
+The number of available Qwen3 serving replicas is limited by tensor parallelism, because one replica consumes $TP_Q$ NPUs.
+
 $$
 R_{Q,\mathrm{avail}} = \left\lfloor \frac{N_Q}{TP_Q} \right\rfloor
 $$
+
+The total Qwen3 token capacity is the number of available replicas multiplied by the per-replica token capacity $\mu_Q$.
 
 $$
 C_Q = R_{Q,\mathrm{avail}} \cdot \mu_Q
@@ -88,9 +102,13 @@ $$
 
 For non-intent requests, incremental agentic CPU cost is $0.30\ CPU\text{-}ms/request$. For intent-bearing requests, CPU-side agent work is $2.00\ CPU\text{-}ms/request$, excluding Qwen3 inference.
 
+For intent requests handled by lightweight agent logic without Qwen3, the modeled agent-side delay is the fixed intent-agent delay plus CPU-side agent work converted to milliseconds in the request path.
+
 $$
 D_{\mathrm{intent,light}} = 4\ \mathrm{ms} + 2\ \mathrm{ms}
 $$
+
+For intent requests that invoke Qwen3, the base Qwen3 serving time is modeled as $8\ \mathrm{ms/request}$ before queueing. Queueing delay is added later by the latency model when NPU utilization increases.
 
 $$
 D_{Q,\mathrm{service}} = 8\ \mathrm{ms/request}
