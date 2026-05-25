@@ -102,6 +102,19 @@ $$
 u_{\mathrm{knee}} = 0.60, \quad \alpha = 0.60, \quad p = 2.0
 $$
 
+### Why Nonlinear Overhead Appears
+
+The nonlinear multiplier is an analytical sensitivity term. It represents the reduction of effective serving efficiency under high concurrency, not a change in the semantic workload of each request. Below the utilization knee, the model remains close to the transparent linear baseline. Above the knee, each additional request can consume more effective resource because the platform also spends capacity on contention, scheduling, memory movement, queueing, and runtime coordination.
+
+| Resource area | Nonlinear factor | Effect represented in the model |
+| --- | --- | --- |
+| CPU | Scheduler overhead, lock contention, cache misses, memory access delay, serialization/deserialization, and state-store pressure. | Effective CPU-ms/request increases after the CPU utilization knee. |
+| Qwen3/NPU serving | Batching inefficiency, request routing, replica scheduling, runtime coordination, cross-replica overhead, and KV/cache memory pressure. | Raw token demand is converted into effective token demand before calculating replicas and NPUs. |
+| Network | Queueing, buffering, congestion-control behavior, retransmission risk, and additional control-plane coordination. | Effective bandwidth and network delay increase when network utilization approaches capacity. |
+| Latency | CPU queueing, NPU queueing, network queueing, and tail-latency amplification. | Mean, p95, and p99 latency rise faster as utilization approaches saturation. |
+
+KV/cache memory pressure is important for Qwen3 serving. During high concurrency, active requests keep key-value cache entries, runtime buffers, and scheduling state resident for longer periods. This reduces the effective throughput available for new requests even when the raw token profile per request is unchanged. Therefore, the model does not claim that Qwen3 produces more semantic tokens per request; it uses effective token demand to represent serving-system overhead around the model.
+
 $$
 C_{\mathrm{cpu,linear}} = \sum_i \frac{\lambda_i}{\lambda_{\mathrm{total}}} C_{\mathrm{base},i} + s_I C_{\mathrm{agent,intent}} + (1-s_I) C_{\mathrm{agent,nonintent}}
 $$
