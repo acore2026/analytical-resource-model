@@ -70,7 +70,8 @@ EVENTS: List[EventType] = [
 ]
 
 INTENT_SETTINGS = [0.00, 0.01, 0.05, 0.10, 0.20, 0.50, 1.00]
-SENSITIVITY_USERS = [100_000.0, 1_000_000.0, 3_600_000.0, 10_000_000.0]
+SENSITIVITY_USERS = [100_000.0, 1_000_000.0, 3_600_000.0, 5_000_000.0, 10_000_000.0]
+USER_COUNT_PLOT_INTENT_RATIO = 0.20
 QWEN3_INVOCATION_SETTINGS = [0.05, 0.10, 0.20, 0.50, 1.00]
 QWEN3_TOKEN_CAPACITY_SETTINGS = [4_712.0, 5_340.0, 15_040.0]
 
@@ -338,6 +339,44 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
     plt.close()
 
 
+def maybe_write_user_count_plot(config: ModelConfig, out_dir: Path) -> None:
+    try:
+        import matplotlib.pyplot as plt  # type: ignore
+    except Exception:
+        return
+
+    rows = [
+        evaluate(replace(config, user_count=user_count), USER_COUNT_PLOT_INTENT_RATIO)
+        for user_count in SENSITIVITY_USERS
+    ]
+    x = [float(row["user_count"]) / 1_000_000.0 for row in rows]
+
+    fig, ax_util = plt.subplots(figsize=(7, 4.2))
+    ax_npu = ax_util.twinx()
+    cpu_line, = ax_util.plot(x, [float(r["cpu_utilization"]) * 100.0 for r in rows], marker="o", label="CPU util")
+    net_line, = ax_util.plot(x, [float(r["network_utilization"]) * 100.0 for r in rows], marker="o", label="Network util")
+    npu_line, = ax_npu.plot(
+        x,
+        [float(r["required_production_npus"]) for r in rows],
+        marker="o",
+        color="tab:orange",
+        label="Required Qwen3 NPUs",
+    )
+    ax_util.axhline(70, color="tab:gray", linestyle="--", linewidth=1, label="70% utilization")
+    ax_util.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
+    ax_util.set_xlabel("User count (million users)")
+    ax_util.set_ylabel("CPU / Network utilization (%)")
+    ax_npu.set_ylabel("Required Qwen3 NPUs")
+    ax_util.set_title("Utilization and required Qwen3 NPUs vs. user count (20% intent)")
+    ax_util.grid(True, alpha=0.3)
+    lines = [cpu_line, net_line, npu_line]
+    labels = [line.get_label() for line in lines]
+    ax_util.legend(lines, labels, loc="upper left")
+    plt.tight_layout()
+    plt.savefig(out_dir / "agentic_user_count_sensitivity.png", dpi=180)
+    plt.close()
+
+
 def main() -> None:
     config = ModelConfig()
     rows = [evaluate(config, ratio) for ratio in INTENT_SETTINGS]
@@ -359,6 +398,7 @@ def main() -> None:
     ]
     write_csv(qwen3_rows, out_dir / "agentic_qwen3_sizing_sensitivity.csv")
     maybe_write_plots(rows, out_dir)
+    maybe_write_user_count_plot(config, out_dir)
 
     print("Wrote outputs/agentic_resource_results.csv")
     print("Wrote outputs/agentic_resource_sensitivity.csv")
@@ -366,6 +406,7 @@ def main() -> None:
     if (out_dir / "agentic_resource_utilization.png").exists():
         print("Wrote outputs/agentic_resource_utilization.png")
         print("Wrote outputs/agentic_latency.png")
+        print("Wrote outputs/agentic_user_count_sensitivity.png")
 
 
 if __name__ == "__main__":
