@@ -146,16 +146,20 @@ $$
 
 ## Analytical Results
 
-The table fixes the user population and event frequencies, then varies the percentage of all requests that carry intent. The visible results use the piecewise nonlinear load-band model.
+The table fixes the user population and event frequencies, then varies the percentage of all requests that carry intent in constant $10\%$ steps. The visible results use the piecewise nonlinear load-band model.
 
 | Intent ratio | Total intent share | Intent rps | Qwen3 rps | Effective Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | Sized Qwen3 util | Required production NPUs | Network bandwidth | Mean latency | p95 latency | Status |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 0% | 0.0% | 0 | 0 | 0 | 180.3 | 70.4% | 53.402 Gbps | 0.0% | 0 | 6.779 Gbps | 24.6 ms | 141.9 ms | degraded |
-| 1% | 1.0% | 1,043 | 104 | 13,768 | 182.4 | 71.2% | 57.140 Gbps | 45.8% | 8 | 6.879 Gbps | 24.9 ms | 148.1 ms | degraded |
-| 5% | 5.0% | 5,215 | 522 | 79,164 | 190.5 | 74.4% | 72.092 Gbps | 65.8% | 32 | 7.280 Gbps | 26.1 ms | 178.0 ms | degraded |
 | 10% | 10.0% | 10,430 | 1,043 | 158,327 | 200.7 | 78.4% | 90.783 Gbps | 65.8% | 64 | 7.780 Gbps | 28.1 ms | 231.8 ms | degraded |
 | 20% | 20.0% | 20,860 | 2,086 | 316,655 | 221.1 | 86.4% | 128.164 Gbps | 67.9% | 124 | 8.782 Gbps | 35.1 ms | 350.8 ms | high_risk |
+| 30% | 30.0% | 31,290 | 3,129 | 474,982 | 283.5 | 110.7% | 165.545 Gbps | 68.7% | 184 | 9.783 Gbps | unstable | unstable | unstable |
+| 40% | 40.0% | 41,720 | 4,172 | 633,310 | 307.5 | 120.1% | 202.926 Gbps | 69.0% | 244 | 10.784 Gbps | unstable | unstable | unstable |
 | 50% | 50.0% | 52,150 | 5,215 | 791,637 | 392.8 | 153.4% | 240.307 Gbps | 69.3% | 304 | 11.786 Gbps | unstable | unstable | unstable |
+| 60% | 60.0% | 62,580 | 6,258 | 949,964 | 421.1 | 164.5% | 277.688 Gbps | 69.4% | 364 | 12.787 Gbps | unstable | unstable | unstable |
+| 70% | 70.0% | 73,010 | 7,301 | 1,108,292 | 449.5 | 175.6% | 315.069 Gbps | 69.5% | 424 | 13.788 Gbps | unstable | unstable | unstable |
+| 80% | 80.0% | 83,440 | 8,344 | 1,266,619 | 477.9 | 186.7% | 352.451 Gbps | 69.6% | 484 | 14.789 Gbps | unstable | unstable | unstable |
+| 90% | 90.0% | 93,870 | 9,387 | 1,424,947 | 506.2 | 197.7% | 389.832 Gbps | 69.7% | 544 | 15.791 Gbps | unstable | unstable | unstable |
 | 100% | 100.0% | 104,300 | 10,430 | 1,583,274 | 534.6 | 208.8% | 427.213 Gbps | 69.7% | 604 | 16.792 Gbps | unstable | unstable | unstable |
 
 Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`. The Qwen3 sizing sensitivity sweep is available in `outputs/agentic_qwen3_sizing_sensitivity.csv`.

@@ -29,7 +29,7 @@ export const EVENTS = [
     { key: "handover", inputId: "eventHandover", labelKey: "handover", tipKey: "handoverTip", perUserPerHour: 23.1, baseLatencyMs: 25, baseCpuMs: 1.8, baseBandwidthKb: 12 },
     { key: "paging", inputId: "eventPaging", labelKey: "paging", tipKey: "pagingTip", perUserPerHour: 14.0, baseLatencyMs: 12, baseCpuMs: 0.6, baseBandwidthKb: 4 }
 ];
-export const SWEEP = [0, 1, 5, 10, 20, 50, 100];
+export const SWEEP = Array.from({ length: 11 }, (_, index) => index * 10);
 export const USER_COUNT_SWEEP = [100000, 1000000, 3600000, 5000000, 10000000];
 export const USER_COUNT_SWEEP_INTENT_RATIO = 20;
 export const MODEL_INPUT_IDS = [
