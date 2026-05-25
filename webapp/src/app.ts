@@ -117,9 +117,9 @@ function transitionGroups(rows: Result[]): Array<{ index: number; ratio: number;
     const previous = rows[index - 1];
     const current = rows[index];
     const labels: string[] = [];
-    if (previous.cpuNonlinearMultiplier !== current.cpuNonlinearMultiplier) labels.push(t("cpu"));
-    if (previous.qwen3NonlinearMultiplier !== current.qwen3NonlinearMultiplier) labels.push(t("npuInference"));
-    if (previous.networkNonlinearMultiplier !== current.networkNonlinearMultiplier) labels.push(t("network"));
+    if (previous.cpuLoadBand !== current.cpuLoadBand) labels.push(t("cpu"));
+    if (previous.qwen3LoadBand !== current.qwen3LoadBand) labels.push(t("npuInference"));
+    if (previous.networkLoadBand !== current.networkLoadBand) labels.push(t("network"));
     if (labels.length > 0) {
       groups.push({
         index,

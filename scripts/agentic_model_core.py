@@ -31,13 +31,35 @@ def queue_delay_ms(util: float, service_ms: float) -> float:
     return service_ms * util / (1.0 - util)
 
 
-def piecewise_multiplier(load: float) -> float:
-    """Contention overhead by operating load band."""
+def load_band(load: float) -> int:
     bounded_load = max(0.0, load)
-    for upper_bound, multiplier in LOAD_BANDS:
+    for index, (upper_bound, _) in enumerate(LOAD_BANDS):
         if bounded_load < upper_bound:
-            return multiplier
-    return LOAD_BANDS[-1][1]
+            return index
+    return len(LOAD_BANDS) - 1
+
+
+def continuous_effective_load(load: float) -> float:
+    """Continuous load-band overhead with non-decreasing marginal slope."""
+    bounded_load = max(0.0, load)
+    effective = 0.0
+    lower_bound = 0.0
+    for upper_bound, slope in LOAD_BANDS:
+        segment_upper = min(bounded_load, upper_bound)
+        if segment_upper > lower_bound:
+            effective += (segment_upper - lower_bound) * slope
+        if bounded_load < upper_bound:
+            break
+        lower_bound = upper_bound
+    return effective
+
+
+def continuous_multiplier(load: float) -> float:
+    """Effective multiplier implied by the continuous load-band function."""
+    bounded_load = max(0.0, load)
+    if bounded_load == 0.0:
+        return 1.0
+    return continuous_effective_load(bounded_load) / bounded_load
 
 
 def status(util: float, degraded: float, high_risk: float) -> str:
@@ -85,7 +107,8 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
         if qwen3_cluster_token_capacity_tps
         else 0.0
     )
-    qwen3_nonlinear_multiplier = piecewise_multiplier(qwen3_raw_util)
+    qwen3_load_band = load_band(qwen3_raw_util)
+    qwen3_nonlinear_multiplier = continuous_multiplier(qwen3_raw_util)
     qwen3_effective_token_demand_tps = qwen3_token_demand_tps * qwen3_nonlinear_multiplier
 
     base_cpu_ms_avg = weighted_average(config, "base_cpu_ms")
@@ -96,7 +119,8 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     linear_cpu_ms_per_request = base_cpu_ms_avg + agent_cpu_ms_avg
     linear_cpu_core_demand = rps_total * linear_cpu_ms_per_request / 1000.0
     linear_cpu_util = linear_cpu_core_demand / config.cpu_cores
-    cpu_nonlinear_multiplier = piecewise_multiplier(linear_cpu_util)
+    cpu_load_band = load_band(linear_cpu_util)
+    cpu_nonlinear_multiplier = continuous_multiplier(linear_cpu_util)
     cpu_ms_per_request = linear_cpu_ms_per_request * cpu_nonlinear_multiplier
     cpu_core_demand = rps_total * cpu_ms_per_request / 1000.0
     cpu_util = cpu_core_demand / config.cpu_cores
@@ -109,7 +133,8 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     )
     linear_bandwidth_gbps = rps_total * bandwidth_kb_per_request * 8.0 / 1_000_000.0
     linear_network_util = linear_bandwidth_gbps / config.nic_gbps
-    network_nonlinear_multiplier = piecewise_multiplier(linear_network_util)
+    network_load_band = load_band(linear_network_util)
+    network_nonlinear_multiplier = continuous_multiplier(linear_network_util)
     bandwidth_gbps = linear_bandwidth_gbps * network_nonlinear_multiplier
     network_util = bandwidth_gbps / config.nic_gbps
     network_delay = queue_delay_ms(network_util, 0.1)
@@ -199,6 +224,7 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
         "qwen3_request_rps": qwen3_request_rps,
         "qwen3_token_demand_tps": qwen3_token_demand_tps,
         "qwen3_raw_utilization": qwen3_raw_util,
+        "qwen3_load_band": qwen3_load_band,
         "qwen3_effective_token_demand_tps": qwen3_effective_token_demand_tps,
         "qwen3_nonlinear_multiplier": qwen3_nonlinear_multiplier,
         "qwen3_cluster_token_capacity_tps": qwen3_cluster_token_capacity_tps,
@@ -210,6 +236,7 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
         "intent_rps": intent_rps,
         "linear_cpu_ms_per_request": linear_cpu_ms_per_request,
         "linear_cpu_utilization": linear_cpu_util,
+        "cpu_load_band": cpu_load_band,
         "cpu_nonlinear_multiplier": cpu_nonlinear_multiplier,
         "cpu_ms_per_request": cpu_ms_per_request,
         "cpu_core_demand": cpu_core_demand,
@@ -223,6 +250,7 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
         "npu_hbm_gb": npu_hbm_gb,
         "npu_hbm_utilization": npu_hbm_gb / production_npu_total_hbm_gb if production_npu_total_hbm_gb else 0.0,
         "linear_network_utilization": linear_network_util,
+        "network_load_band": network_load_band,
         "network_nonlinear_multiplier": network_nonlinear_multiplier,
         "network_bandwidth_gbps": bandwidth_gbps,
         "network_utilization": network_util,

@@ -9,15 +9,42 @@ function queueDelayMs(util, serviceMs) {
         return 0;
     return serviceMs * util / (1 - util);
 }
-function piecewiseMultiplier(load) {
+function effectiveLoadMultiplier(load) {
+    const boundedLoad = Math.max(0, load);
+    if (boundedLoad === 0)
+        return 1;
+    return continuousEffectiveLoad(boundedLoad) / boundedLoad;
+}
+function loadBand(load) {
     const boundedLoad = Math.max(0, load);
     if (boundedLoad < 0.6)
-        return 1;
+        return 0;
     if (boundedLoad < 0.8)
-        return 1.15;
+        return 1;
     if (boundedLoad < 0.9)
-        return 1.35;
-    return 1.6;
+        return 2;
+    return 3;
+}
+function continuousEffectiveLoad(load) {
+    const boundedLoad = Math.max(0, load);
+    const segments = [
+        { upper: 0.6, slope: 1.0 },
+        { upper: 0.8, slope: 1.15 },
+        { upper: 0.9, slope: 1.35 },
+        { upper: Infinity, slope: 1.6 }
+    ];
+    let effective = 0;
+    let lower = 0;
+    for (const segment of segments) {
+        const segmentUpper = Math.min(boundedLoad, segment.upper);
+        if (segmentUpper > lower) {
+            effective += (segmentUpper - lower) * segment.slope;
+        }
+        if (boundedLoad < segment.upper)
+            break;
+        lower = segment.upper;
+    }
+    return effective;
 }
 export function classifyStatus(util, degraded = 0.7, highRisk = 0.85) {
     if (util >= 1)
@@ -76,7 +103,8 @@ export function evaluate(num, intentRatioPercent = num("intentRatio"), userCount
     const cpuCores = Math.max(1, num("cpuCores"));
     const linearCpuCoreDemand = totalRps * linearCpuMsPerRequest / 1000;
     const linearCpuUtil = linearCpuCoreDemand / cpuCores;
-    const cpuNonlinearMultiplier = piecewiseMultiplier(linearCpuUtil);
+    const cpuLoadBand = loadBand(linearCpuUtil);
+    const cpuNonlinearMultiplier = effectiveLoadMultiplier(linearCpuUtil);
     const cpuMsPerRequest = linearCpuMsPerRequest * cpuNonlinearMultiplier;
     const cpuCoreDemand = totalRps * cpuMsPerRequest / 1000;
     const cpuUtil = cpuCoreDemand / cpuCores;
@@ -84,7 +112,8 @@ export function evaluate(num, intentRatioPercent = num("intentRatio"), userCount
     const bandwidthKbPerRequest = baseBandwidthAvg + actualIntentShare * Math.max(0, num("intentBandwidthKb"));
     const linearNetworkGbps = totalRps * bandwidthKbPerRequest * 8 / 1000000;
     const linearNetworkUtil = linearNetworkGbps / Math.max(1, num("nicGbps"));
-    const networkNonlinearMultiplier = piecewiseMultiplier(linearNetworkUtil);
+    const networkLoadBand = loadBand(linearNetworkUtil);
+    const networkNonlinearMultiplier = effectiveLoadMultiplier(linearNetworkUtil);
     const networkGbps = linearNetworkGbps * networkNonlinearMultiplier;
     const networkUtil = networkGbps / Math.max(1, num("nicGbps"));
     const networkDelay = queueDelayMs(networkUtil, 0.1);
@@ -100,7 +129,8 @@ export function evaluate(num, intentRatioPercent = num("intentRatio"), userCount
     const qwen3RequestRps = intentRps * qwen3InvocationRatio;
     const qwen3TokenDemand = qwen3RequestRps * qwen3TokensPerRequest;
     const qwen3RawUtil = qwen3ClusterCapacity > 0 ? qwen3TokenDemand / qwen3ClusterCapacity : 0;
-    const qwen3NonlinearMultiplier = piecewiseMultiplier(qwen3RawUtil);
+    const qwen3LoadBand = loadBand(qwen3RawUtil);
+    const qwen3NonlinearMultiplier = effectiveLoadMultiplier(qwen3RawUtil);
     const qwen3EffectiveTokenDemand = qwen3TokenDemand * qwen3NonlinearMultiplier;
     const npuUtil = qwen3ClusterCapacity > 0 ? qwen3EffectiveTokenDemand / qwen3ClusterCapacity : 0;
     const npuQueueDelay = qwen3ClusterCapacity > 0 ? queueDelayMs(npuUtil, 1000 / qwen3ClusterCapacity) : 0;
@@ -148,6 +178,7 @@ export function evaluate(num, intentRatioPercent = num("intentRatio"), userCount
         actualIntentShare,
         intentRps,
         cpuMsPerRequest,
+        cpuLoadBand,
         cpuNonlinearMultiplier,
         cpuCoreDemand,
         cpuUtil,
@@ -158,12 +189,14 @@ export function evaluate(num, intentRatioPercent = num("intentRatio"), userCount
         qwen3RequestRps,
         qwen3TokenDemand,
         qwen3RawUtil,
+        qwen3LoadBand,
         qwen3NonlinearMultiplier,
         qwen3EffectiveTokenDemand,
         qwen3AvailableReplicas,
         npuHbmGb,
         npuHbmUtil,
         networkGbps,
+        networkLoadBand,
         networkNonlinearMultiplier,
         networkUtil,
         meanLatency,

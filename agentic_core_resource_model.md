@@ -98,22 +98,28 @@ $$
 
 Intent-bearing requests add $12\ \mathrm{KB/request}$ of control-plane metadata for intent containers, task metadata, tool invocation wrappers, and inter-agent status/tracing metadata.
 
-## Piecewise Nonlinear Load Bands
+## Continuous Load-Band Nonlinear Model
 
-The model uses fixed operating bands to represent high-load contention. Linear demand is calculated first. The corresponding CPU, network, or Qwen3 serving load then selects one multiplier $M(u)$ from the table below.
+The model uses fixed operating bands to represent high-load contention. Linear demand is calculated first. The corresponding CPU, network, or Qwen3 serving load then passes through a continuous load-band function $F(u)$. Each band has a higher marginal slope than the previous band.
 
-| Linear load range | Operating state | Multiplier $M(u)$ |
+| Linear load range | Operating state | Marginal slope |
 | ---: | --- | ---: |
 | $0\% \le u < 60\%$ | Normal | $1.00$ |
 | $60\% \le u < 80\%$ | Busy | $1.15$ |
 | $80\% \le u < 90\%$ | High load | $1.35$ |
 | $90\% \le u$ | Critical | $1.60$ |
 
-This model is nonlinear because the effective cost changes by operating band instead of increasing with a single constant slope. Therefore, the utilization figure is expected to have corners at band transitions; those corners are not interpolation artifacts.
+This model is nonlinear because the effective cost changes by operating band instead of increasing with a single constant slope. The function is continuous, so there are no artificial utilization jumps at band boundaries. The utilization figure is expected to change slope at band transitions; those slope changes are not interpolation artifacts.
+
+Let $[x]_+=\max(x,0)$. The continuous load-band function is:
+
+$$
+F(u)=u+0.15[u-0.60]_+ + 0.20[u-0.80]_+ + 0.25[u-0.90]_+
+$$
 
 ### Why Nonlinear Overhead Appears
 
-The nonlinear multiplier represents the reduction of effective serving efficiency under high concurrency, not a change in the semantic workload of each request. In normal operation the model stays equal to the transparent linear baseline. In busy, high-load, and critical operation, each request also consumes capacity through contention, scheduling, memory movement, queueing, and runtime coordination.
+The nonlinear load-band function represents the reduction of effective serving efficiency under high concurrency, not a change in the semantic workload of each request. In normal operation the model stays equal to the transparent linear baseline. In busy, high-load, and critical operation, each additional unit of load also consumes capacity through contention, scheduling, memory movement, queueing, and runtime coordination.
 
 | Resource area | Nonlinear factor | Effect represented in the model |
 | --- | --- | --- |
@@ -129,11 +135,15 @@ C_{\mathrm{cpu,linear}} = \sum_i \frac{\lambda_i}{\lambda_{\mathrm{total}}} C_{\
 $$
 
 $$
-D_{\mathrm{cpu}} = \frac{\lambda_{\mathrm{total}} C_{\mathrm{cpu,linear}} M(u_{\mathrm{cpu,linear}})}{1000}
+u_{\mathrm{cpu}} = F(u_{\mathrm{cpu,linear}})
 $$
 
 $$
-B_{\mathrm{net}} = \frac{\lambda_{\mathrm{total}} B_{\mathrm{req,linear}} \cdot 8}{1,000,000} \cdot M(u_{\mathrm{net,linear}})
+D_{\mathrm{cpu}} = C_{\mathrm{cpu,capacity}} \cdot u_{\mathrm{cpu}}
+$$
+
+$$
+u_{\mathrm{net}} = F(u_{\mathrm{net,linear}})
 $$
 
 $$
@@ -141,11 +151,11 @@ u_{Q,\mathrm{linear}} = \frac{T_Q}{C_Q}
 $$
 
 $$
-T_{Q,\mathrm{eff}} = T_Q \cdot M(u_{Q,\mathrm{linear}})
+u_Q = F(u_{Q,\mathrm{linear}})
 $$
 
 $$
-u_Q = \frac{T_{Q,\mathrm{eff}}}{C_Q}
+T_{Q,\mathrm{eff}} = C_Q \cdot u_Q
 $$
 
 Queueing delay is represented by:
@@ -156,21 +166,21 @@ $$
 
 ## Analytical Results
 
-The table fixes the user population, event frequencies, and Qwen3 cluster size, then varies the percentage of all requests that carry intent in constant $10\%$ steps. The visible results use the piecewise nonlinear load-band model. The intent-sweep figure uses $1\%$ sampling for visual detail and marks where CPU or NPU enters a new load band.
+The table fixes the user population, event frequencies, and Qwen3 cluster size, then varies the percentage of all requests that carry intent in constant $10\%$ steps. The visible results use the continuous load-band nonlinear model. The intent-sweep figure uses $1\%$ sampling for visual detail and marks where CPU or NPU enters a new load band.
 
 | Intent ratio | Total intent share | Intent rps | Qwen3 rps | Effective Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | NPU util | Network bandwidth | Mean latency | p95 latency | Status |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 0% | 0.0% | 0 | 0 | 0 | 180.3 | 70.4% | 53.402 Gbps | 0.0% | 6.779 Gbps | 24.6 ms | 141.9 ms | degraded |
-| 10% | 10.0% | 10,430 | 1,043 | 137,676 | 200.7 | 78.4% | 90.783 Gbps | 28.6% | 7.780 Gbps | 28.1 ms | 231.8 ms | degraded |
-| 20% | 20.0% | 20,860 | 2,086 | 275,352 | 221.1 | 86.4% | 128.164 Gbps | 57.2% | 8.782 Gbps | 35.1 ms | 350.8 ms | high_risk |
-| 30% | 30.0% | 31,290 | 3,129 | 557,588 | 283.5 | 110.7% | 165.545 Gbps | 115.9% | 9.783 Gbps | unstable | unstable | unstable |
-| 40% | 40.0% | 41,720 | 4,172 | 881,126 | 307.5 | 120.1% | 202.926 Gbps | 183.1% | 10.784 Gbps | unstable | unstable | unstable |
-| 50% | 50.0% | 52,150 | 5,215 | 1,101,408 | 392.8 | 153.4% | 240.307 Gbps | 228.8% | 11.786 Gbps | unstable | unstable | unstable |
-| 60% | 60.0% | 62,580 | 6,258 | 1,321,690 | 421.1 | 164.5% | 277.688 Gbps | 274.6% | 12.787 Gbps | unstable | unstable | unstable |
-| 70% | 70.0% | 73,010 | 7,301 | 1,541,971 | 449.5 | 175.6% | 315.069 Gbps | 320.4% | 13.788 Gbps | unstable | unstable | unstable |
-| 80% | 80.0% | 83,440 | 8,344 | 1,762,253 | 477.9 | 186.7% | 352.451 Gbps | 366.2% | 14.789 Gbps | unstable | unstable | unstable |
-| 90% | 90.0% | 93,870 | 9,387 | 1,982,534 | 506.2 | 197.7% | 389.832 Gbps | 411.9% | 15.791 Gbps | unstable | unstable | unstable |
-| 100% | 100.0% | 104,300 | 10,430 | 2,202,816 | 534.6 | 208.8% | 427.213 Gbps | 457.7% | 16.792 Gbps | unstable | unstable | unstable |
+| 0% | 0.0% | 0 | 0 | 0 | 157.3 | 61.4% | 53.402 Gbps | 0.0% | 6.779 Gbps | 22.9 ms | 95.8 ms | stable |
+| 10% | 10.0% | 10,430 | 1,043 | 137,676 | 177.7 | 69.4% | 90.783 Gbps | 28.6% | 7.780 Gbps | 24.9 ms | 138.1 ms | stable |
+| 20% | 20.0% | 20,860 | 2,086 | 275,352 | 198.1 | 77.4% | 128.164 Gbps | 57.2% | 8.782 Gbps | 28.1 ms | 220.6 ms | degraded |
+| 30% | 30.0% | 31,290 | 3,129 | 437,268 | 219.5 | 85.7% | 165.545 Gbps | 90.9% | 9.783 Gbps | 34.9 ms | 348.9 ms | high_risk |
+| 40% | 40.0% | 41,720 | 4,172 | 652,518 | 243.5 | 95.1% | 202.926 Gbps | 135.6% | 10.784 Gbps | unstable | unstable | unstable |
+| 50% | 50.0% | 52,150 | 5,215 | 872,800 | 271.2 | 105.9% | 240.307 Gbps | 181.3% | 11.786 Gbps | unstable | unstable | unstable |
+| 60% | 60.0% | 62,580 | 6,258 | 1,093,082 | 299.5 | 117.0% | 277.688 Gbps | 227.1% | 12.787 Gbps | unstable | unstable | unstable |
+| 70% | 70.0% | 73,010 | 7,301 | 1,313,363 | 327.9 | 128.1% | 315.069 Gbps | 272.9% | 13.788 Gbps | unstable | unstable | unstable |
+| 80% | 80.0% | 83,440 | 8,344 | 1,533,645 | 356.3 | 139.2% | 352.451 Gbps | 318.7% | 14.789 Gbps | unstable | unstable | unstable |
+| 90% | 90.0% | 93,870 | 9,387 | 1,753,926 | 384.6 | 150.2% | 389.832 Gbps | 364.4% | 15.791 Gbps | unstable | unstable | unstable |
+| 100% | 100.0% | 104,300 | 10,430 | 1,974,208 | 413.0 | 161.3% | 427.213 Gbps | 410.2% | 16.792 Gbps | unstable | unstable | unstable |
 
 Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`. The Qwen3 sensitivity sweep is available in `outputs/agentic_qwen3_sizing_sensitivity.csv`.
 
@@ -183,7 +193,7 @@ The following user-count sensitivity figure fixes the intent ratio at $20\%$ and
 
 ## Interpretation
 
-With $128$ configured NPUs assigned to Qwen3 serving and $10\%$ Qwen3 invocation ratio, NPU utilization is $28.6\%$ at $10\%$ intent ratio and $57.2\%$ at $20\%$ intent ratio. At $30\%$ intent ratio, NPU utilization exceeds $100\%$, so the fixed NPU cluster is overloaded. Higher intent ratios require more NPU capacity, lower Qwen3 invocation ratio, shorter token profiles, faster serving, or admission control.
+With $128$ configured NPUs assigned to Qwen3 serving and $10\%$ Qwen3 invocation ratio, NPU utilization is $28.6\%$ at $10\%$ intent ratio, $57.2\%$ at $20\%$ intent ratio, and $90.9\%$ at $30\%$ intent ratio. At $40\%$ intent ratio, NPU utilization exceeds $100\%$, so the fixed NPU cluster is overloaded. Higher intent ratios require more NPU capacity, lower Qwen3 invocation ratio, shorter token profiles, faster serving, or admission control.
 
 ## Model Boundary
 

@@ -52,11 +52,11 @@ $$
 T_Q = 10,430 \cdot 132 = 1,376,760\ \mathrm{tokens/s}
 $$
 
-## Step 5: Add Nonlinear High-Load Overhead
+## Step 5: Add Continuous High-Load Overhead
 
-The model uses easy operating bands instead of a complex curve:
+The model uses easy operating bands with increasing marginal slope:
 
-| Load range | State | Multiplier |
+| Load range | State | Marginal slope |
 | ---: | --- | ---: |
 | $0\% \le u < 60\%$ | Normal | $1.00$ |
 | $60\% \le u < 80\%$ | Busy | $1.15$ |
@@ -66,7 +66,7 @@ The model uses easy operating bands instead of a complex curve:
 For the default full-intent Qwen3 case with a fixed 128-NPU cluster assigned to inference:
 
 $$
-T_{Q,\mathrm{eff}} = 2,202,816\ \mathrm{tokens/s}
+T_{Q,\mathrm{eff}} = 1,974,208\ \mathrm{tokens/s}
 $$
 
 ## Step 6: Calculate NPU Utilization
@@ -90,7 +90,7 @@ $$
 NPU utilization is:
 
 $$
-u_Q = \frac{2,202,816}{481,280} = 457.7\%
+u_Q = \frac{1,974,208}{481,280} = 410.2\%
 $$
 
 ## Main Message
@@ -102,6 +102,7 @@ For the baseline production scenario:
 - $10\%$ of intent requests invoke Qwen3.
 - The configured NPU cluster for Qwen3 serving has $128$ NPUs.
 - At $20\%$ intent ratio, NPU utilization is $57.2\%$.
-- At $30\%$ intent ratio, NPU utilization is $115.9\%$, so the configured NPU cluster is overloaded.
+- At $30\%$ intent ratio, NPU utilization is $90.9\%$, so the configured NPU cluster is high risk but not overloaded.
+- At $40\%$ intent ratio, NPU utilization is $135.6\%$, so the configured NPU cluster is overloaded.
 
 This is the core logic of the analysis.

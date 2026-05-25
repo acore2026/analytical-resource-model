@@ -98,11 +98,11 @@ function transitionGroups(rows) {
         const previous = rows[index - 1];
         const current = rows[index];
         const labels = [];
-        if (previous.cpuNonlinearMultiplier !== current.cpuNonlinearMultiplier)
+        if (previous.cpuLoadBand !== current.cpuLoadBand)
             labels.push(t("cpu"));
-        if (previous.qwen3NonlinearMultiplier !== current.qwen3NonlinearMultiplier)
+        if (previous.qwen3LoadBand !== current.qwen3LoadBand)
             labels.push(t("npuInference"));
-        if (previous.networkNonlinearMultiplier !== current.networkNonlinearMultiplier)
+        if (previous.networkLoadBand !== current.networkLoadBand)
             labels.push(t("network"));
         if (labels.length > 0) {
             groups.push({
