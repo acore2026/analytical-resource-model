@@ -125,9 +125,11 @@ KV/cache memory pressure is important for Qwen3 serving. During high concurrency
 
 The nonlinear assumption is supported by established LLM-serving literature. Sarathi-Serve describes the throughput-latency tradeoff between prefill and decode phases and introduces scheduling to reduce stalls ([arXiv:2403.02310](https://arxiv.org/abs/2403.02310), [OSDI 2024 PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)). vLLM/PagedAttention shows that KV-cache memory is large, dynamic, and can limit batching efficiency when unmanaged ([arXiv:2309.06180](https://arxiv.org/abs/2309.06180)). Microsoft Research formulates online LLM inference scheduling with KV-cache memory constraints and explicitly treats KV-cache management as a latency and utilization problem ([Microsoft Research](https://www.microsoft.com/en-us/research/publication/online-scheduling-for-llm-inference-with-kv-cache-constraints/), [arXiv:2502.07115](https://arxiv.org/abs/2502.07115)). These references justify modeling high-concurrency inference as a convex capacity problem. The exact coefficient remains tunable for deployment calibration.
 
-The following equations show how the model applies the convex overhead function to CPU, network, and Qwen3/NPU resources.
+The following subsections show how the model applies the convex overhead function to CPU, Qwen3/NPU, network, and latency.
 
-First, the average linear CPU cost per request is calculated as the traffic-weighted deterministic core cost plus the agentic CPU cost. The intent share $s_I$ determines how much traffic uses intent-agent CPU work versus non-intent agent CPU work.
+### CPU Utilization
+
+CPU utilization includes deterministic core-network procedure work and CPU-side agent work. The average linear CPU cost per request is calculated as the traffic-weighted deterministic core cost plus the agentic CPU cost. The intent share $s_I$ determines how much traffic uses intent-agent CPU work versus non-intent agent CPU work.
 
 $$
 C_{\mathrm{cpu,linear}} = \sum_i \frac{\lambda_i}{\lambda_{\mathrm{total}}} C_{\mathrm{base},i} + s_I C_{\mathrm{agent,intent}} + (1-s_I) C_{\mathrm{agent,nonintent}}
@@ -145,13 +147,9 @@ $$
 D_{\mathrm{cpu}} = C_{\mathrm{cpu,capacity}} \cdot u_{\mathrm{cpu}}
 $$
 
-The same nonlinear adjustment is applied to network utilization so that queueing, buffering, and coordination overhead are reflected in the effective bandwidth load.
+### Qwen3/NPU Utilization
 
-$$
-u_{\mathrm{net}} = F(u_{\mathrm{net,linear}})
-$$
-
-For Qwen3 serving, raw NPU utilization is calculated from token demand divided by the configured Qwen3 token capacity.
+NPU utilization is driven by the subset of intent requests that invoke Qwen3. Those requests are converted into token demand and then compared with the configured Qwen3 serving capacity.
 
 $$
 u_{Q,\mathrm{linear}} = \frac{T_Q}{C_Q}
@@ -169,7 +167,17 @@ $$
 T_{Q,\mathrm{eff}} = C_Q \cdot u_Q
 $$
 
-Finally, queueing delay is represented by an M/M/1-style approximation. $S$ is the service time and $u$ is the effective utilization of the bottleneck resource. The delay grows quickly as $u$ approaches $1$, which is why latency becomes unstable near saturation.
+### Network Utilization
+
+Network utilization includes baseline control-plane message traffic plus additional intent metadata, tool-invocation wrappers, and inter-agent coordination messages. The same nonlinear adjustment is applied to network utilization so that queueing, buffering, and coordination overhead are reflected in the effective bandwidth load.
+
+$$
+u_{\mathrm{net}} = F(u_{\mathrm{net,linear}})
+$$
+
+### Latency and Queueing
+
+Queueing delay is represented by an M/M/1-style approximation. $S$ is the service time and $u$ is the effective utilization of the bottleneck resource. The delay grows quickly as $u$ approaches $1$, which is why latency becomes unstable near saturation.
 
 $$
 D_{\mathrm{queue}} = \frac{S \cdot u}{1-u}, \quad 0 \le u < 1
