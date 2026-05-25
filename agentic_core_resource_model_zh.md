@@ -8,7 +8,7 @@
 
 ## 负载模型
 
-令 $N_{\mathrm{user}}$ 表示注册用户数，$f_i$ 表示单个用户每小时触发事件 $i$ 的次数。
+令 $N_{\mathrm{user}}$ 表示注册用户数， $f_i$ 表示单个用户每小时触发事件 $i$ 的次数。
 
 $$
 \lambda_i = \frac{N_{\mathrm{user}} \cdot f_i}{3600}
@@ -58,7 +58,7 @@ $$
 | 复杂意图 Qwen3 服务时间 | 排队前 8 ms/request |
 | 意图额外带宽 | 12 KB/request |
 
-$CPU\text{-}ms$ 表示一个 CPU 核被占用一毫秒。例如，$2\ CPU\text{-}ms/request$ 在 $100,000$ requests/s 下消耗 $200$ CPU cores。
+$CPU\text{-}ms$ 表示一个 CPU 核被占用一毫秒。例如， $2\ CPU\text{-}ms/request$ 在 $100,000$ requests/s 下消耗 $200$ CPU cores。
 
 ## Qwen3 能力参考
 
@@ -148,7 +148,7 @@ $$
 
 生成结果位于 `outputs/agentic_resource_results.csv`。用户规模敏感性扫描位于 `outputs/agentic_resource_sensitivity.csv`。Qwen3 规划敏感性扫描位于 `outputs/agentic_qwen3_sizing_sensitivity.csv`。
 
-在优化参考值 $15,040\ \mathrm{tokens/s/replica}$ 下，$100\%$ 意图比例的 Qwen3 生产规划如下：
+在优化参考值 $15,040\ \mathrm{tokens/s/replica}$ 下， $100\%$ 意图比例的 Qwen3 生产规划如下：
 
 | Qwen3 调用比例 | Qwen3 rps | 有效 token 需求 | 所需副本 | 所需 NPU | 规划后 Qwen3 利用率 |
 | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -167,7 +167,7 @@ $$
 
 ## 结果解读
 
-在非线性饱和模型和 $10\%$ Qwen3 调用比例下，$100\%$ 意图流量需要 $136$ 个 Qwen3 副本，即 $544$ 张 NPU。满负载场景会因 CPU 超载而失稳，除非增加 CPU 容量、降低意图比例、降低 CPU 侧处理成本或引入准入控制。
+在非线性饱和模型和 $10\%$ Qwen3 调用比例下， $100\%$ 意图流量需要 $136$ 个 Qwen3 副本，即 $544$ 张 NPU。满负载场景会因 CPU 超载而失稳，除非增加 CPU 容量、降低意图比例、降低 CPU 侧处理成本或引入准入控制。
 
 ## 模型边界
 
