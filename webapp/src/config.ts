@@ -33,7 +33,8 @@ export const EVENTS: EventDefinition[] = [
   { key: "paging", inputId: "eventPaging", labelKey: "paging", tipKey: "pagingTip", perUserPerHour: 14.0, baseLatencyMs: 12, baseCpuMs: 0.6, baseBandwidthKb: 4 }
 ];
 
-export const SWEEP = Array.from({ length: 11 }, (_, index) => index * 10);
+export const TABLE_SWEEP = Array.from({ length: 11 }, (_, index) => index * 10);
+export const CHART_SWEEP = Array.from({ length: 101 }, (_, index) => index);
 export const USER_COUNT_SWEEP = [
   500000,
   1000000,

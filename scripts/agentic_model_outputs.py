@@ -46,6 +46,7 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
         x,
         [float(r["cpu_utilization"]) * 100.0 for r in rows],
         marker="o",
+        markevery=10,
         color=CPU_COLOR,
         label="CPU util",
     )
@@ -53,6 +54,7 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
         x,
         [float(r["network_utilization"]) * 100.0 for r in rows],
         marker="s",
+        markevery=10,
         color=NETWORK_COLOR,
         label="Network util",
     )
@@ -60,6 +62,7 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
         x,
         [float(r["npu_utilization"]) * 100.0 for r in rows],
         marker="^",
+        markevery=10,
         color=NPU_COLOR,
         label="NPU util",
     )
@@ -77,9 +80,9 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
     plt.close()
 
     plt.figure(figsize=(7, 4.2))
-    plt.plot(x, finite_series("mean_latency_ms"), marker="o", color="#2a7f3e", label="mean")
-    plt.plot(x, finite_series("p95_latency_ms"), marker="s", color="#1f77b4", label="p95")
-    plt.plot(x, finite_series("p99_latency_ms"), marker="^", color="#d66a00", label="p99")
+    plt.plot(x, finite_series("mean_latency_ms"), marker="o", markevery=10, color="#2a7f3e", label="mean")
+    plt.plot(x, finite_series("p95_latency_ms"), marker="s", markevery=10, color="#1f77b4", label="p95")
+    plt.plot(x, finite_series("p99_latency_ms"), marker="^", markevery=10, color="#d66a00", label="p99")
     plt.xlabel("Intent ratio across all requests (%)")
     plt.ylabel("Latency (ms)")
     plt.title("Piecewise nonlinear control-plane latency vs. intent ratio")

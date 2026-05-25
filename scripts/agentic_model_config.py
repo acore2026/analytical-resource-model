@@ -60,7 +60,9 @@ EVENTS: List[EventType] = [
     EventType("paging", 14.0, 12.0, 0.6, 4.0),
 ]
 
-INTENT_SETTINGS = [step / 100.0 for step in range(0, 101, 10)]
+INTENT_TABLE_SETTINGS = [step / 100.0 for step in range(0, 101, 10)]
+INTENT_PLOT_SETTINGS = [step / 100.0 for step in range(0, 101)]
+INTENT_SETTINGS = INTENT_TABLE_SETTINGS
 SENSITIVITY_USERS = [
     500_000.0,
     1_000_000.0,

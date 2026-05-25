@@ -13,6 +13,7 @@ from pathlib import Path
 
 from agentic_model_config import (
     INTENT_SETTINGS,
+    INTENT_PLOT_SETTINGS,
     QWEN3_INVOCATION_SETTINGS,
     QWEN3_TOKEN_CAPACITY_SETTINGS,
     SENSITIVITY_USERS,
@@ -24,6 +25,7 @@ from agentic_model_outputs import maybe_write_plots, maybe_write_user_count_plot
 def main() -> None:
     config = ModelConfig()
     rows = [evaluate(config, ratio) for ratio in INTENT_SETTINGS]
+    plot_rows = [evaluate(config, ratio) for ratio in INTENT_PLOT_SETTINGS]
     out_dir = Path("outputs")
     write_csv(rows, out_dir / "agentic_resource_results.csv")
     sensitivity_rows = [
@@ -41,7 +43,7 @@ def main() -> None:
         for capacity in QWEN3_TOKEN_CAPACITY_SETTINGS
     ]
     write_csv(qwen3_rows, out_dir / "agentic_qwen3_sizing_sensitivity.csv")
-    maybe_write_plots(rows, out_dir)
+    maybe_write_plots(plot_rows, out_dir)
     maybe_write_user_count_plot(config, out_dir)
 
     print("Wrote outputs/agentic_resource_results.csv")

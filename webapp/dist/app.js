@@ -1,4 +1,4 @@
-import { BASELINE, EVENTS, INPUT_IDS, SWEEP, USER_COUNT_SWEEP, USER_COUNT_SWEEP_INTENT_RATIO } from "./config.js";
+import { BASELINE, CHART_SWEEP, EVENTS, INPUT_IDS, TABLE_SWEEP, USER_COUNT_SWEEP, USER_COUNT_SWEEP_INTENT_RATIO } from "./config.js";
 import { I18N } from "./i18n.js";
 import { clamp, classifyStatus, evaluate as evaluateModel, fmt, pct } from "./model.js";
 let currentLang = "en";
@@ -107,6 +107,7 @@ function drawChart(rows) {
     const plotH = height - pad.top - pad.bottom;
     const x = (index) => pad.left + (index / (rows.length - 1)) * plotW;
     const y = (value, max) => pad.top + plotH - (clamp(value, 0, max) / max) * plotH;
+    const isMajorIntentTick = (row) => Math.round(row.intentRatio * 100) % 10 === 0;
     const finiteUtils = rows.flatMap((row) => [row.cpuUtil, row.networkUtil, row.npuUtil]).filter(Number.isFinite);
     const maxUtil = Math.max(1.1, ...finiteUtils);
     ctx.strokeStyle = "#d7ddd3";
@@ -140,6 +141,8 @@ function drawChart(rows) {
         });
         ctx.stroke();
         rows.forEach((row, index) => {
+            if (!isMajorIntentTick(row))
+                return;
             ctx.fillStyle = item.color;
             ctx.fillRect(x(index) - 4, y(row[item.key], maxUtil) - 4, 8, 8);
         });
@@ -155,6 +158,8 @@ function drawChart(rows) {
     ctx.font = "20px Aptos, Segoe UI, sans-serif";
     ctx.textAlign = "center";
     rows.forEach((row, index) => {
+        if (!isMajorIntentTick(row))
+            return;
         ctx.fillText(`${Math.round(row.intentRatio * 100)}%`, x(index), height - 14);
     });
     let legendX = pad.left;
@@ -274,10 +279,11 @@ function applyTranslations() {
 }
 function recompute() {
     const current = evaluateModel(num);
-    const rows = SWEEP.map((ratio) => evaluateModel(num, ratio));
+    const tableRows = TABLE_SWEEP.map((ratio) => evaluateModel(num, ratio));
+    const chartRows = CHART_SWEEP.map((ratio) => evaluateModel(num, ratio));
     updateSummary(current);
-    updateTable(rows);
-    drawChart(rows);
+    updateTable(tableRows);
+    drawChart(chartRows);
     drawUserCountChart();
 }
 function reset() {
