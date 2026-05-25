@@ -111,26 +111,6 @@ function updateTable(rows: Result[]): void {
   `).join("");
 }
 
-function transitionGroups(rows: Result[]): Array<{ index: number; ratio: number; label: string }> {
-  const groups: Array<{ index: number; ratio: number; label: string }> = [];
-  for (let index = 1; index < rows.length; index += 1) {
-    const previous = rows[index - 1];
-    const current = rows[index];
-    const labels: string[] = [];
-    if (previous.cpuLoadBand !== current.cpuLoadBand) labels.push(t("cpu"));
-    if (previous.qwen3LoadBand !== current.qwen3LoadBand) labels.push(t("npuInference"));
-    if (previous.networkLoadBand !== current.networkLoadBand) labels.push(t("network"));
-    if (labels.length > 0) {
-      groups.push({
-        index,
-        ratio: Math.round(current.intentRatio * 100),
-        label: labels.join("+")
-      });
-    }
-  }
-  return groups;
-}
-
 function drawChart(rows: Result[]): void {
   const canvas = mustGet<HTMLCanvasElement>("sweepChart");
   const ctx = canvas.getContext("2d");
@@ -169,27 +149,6 @@ function drawChart(rows: Result[]): void {
     { key: "networkUtil", label: t("network"), color: "#1769d1" },
     { key: "npuUtil", label: t("npuInference"), color: "#d66a00" }
   ];
-
-  ctx.save();
-  ctx.strokeStyle = "#71786f";
-  ctx.fillStyle = "#454d47";
-  ctx.font = "12px Aptos, Segoe UI, sans-serif";
-  ctx.textAlign = "center";
-  ctx.setLineDash([3, 6]);
-  transitionGroups(rows).forEach((group, groupIndex) => {
-    const lineX = x(group.index);
-    ctx.beginPath();
-    ctx.moveTo(lineX, pad.top);
-    ctx.lineTo(lineX, height - pad.bottom);
-    ctx.stroke();
-
-    ctx.save();
-    ctx.translate(lineX, pad.top + 86 + (groupIndex % 2) * 64);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText(`${group.label} ${t("bandTransition")} ${group.ratio}%`, 0, 0);
-    ctx.restore();
-  });
-  ctx.restore();
 
   for (const item of utilSeries) {
     ctx.strokeStyle = item.color;
@@ -240,7 +199,7 @@ function drawChart(rows: Result[]): void {
   ctx.fillStyle = "#454d47";
   ctx.font = "15px Aptos, Segoe UI, sans-serif";
   ctx.textAlign = "right";
-  ctx.fillText(t("bandTransitionNote"), width - pad.right, height - pad.bottom - 8);
+  ctx.fillText(t("curvatureNote"), width - pad.right, height - pad.bottom - 8);
 }
 
 function drawUserCountChart(): void {

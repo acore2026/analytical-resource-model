@@ -1,6 +1,6 @@
 # Nonlinear Model Options for Resource Analysis
 
-This document compares candidate extensions for modeling non-linear resource growth in the agentic 6G core resource model. The selected model for the analytical report and web calculator is Option 3, the piecewise load-band model.
+This document compares candidate extensions for modeling non-linear resource growth in the agentic 6G core resource model. The selected model for the analytical report and web calculator is Option 4, the smooth convex overhead model.
 
 ![Linear and nonlinear resource model comparison](outputs/nonlinear_model_options.png)
 
@@ -85,7 +85,23 @@ F_piecewise(L) =
 D_piecewise = L * F_piecewise(L)
 ```
 
-This option is selected because it is easy to explain verbally: normal, busy, high-load, and critical operation each have one defined multiplier. It is less smooth than the saturation curve and introduces visible changes at tier boundaries.
+This option is easy to explain verbally: normal, busy, high-load, and critical operation each have one defined multiplier. It is less smooth than the saturation curve and introduces visible changes at tier boundaries.
+
+## Option 4: Smooth Convex Curve
+
+The selected model uses a compact convex function:
+
+```text
+F_convex(L) = L + alpha * L^2
+```
+
+Example parameter used in the report:
+
+| Parameter | Value | Meaning |
+| --- | ---: | --- |
+| `alpha` | 0.15 | Additional contention overhead as normalized load grows. |
+
+This option is selected because it has no artificial tier boundaries, produces visible curvature, and remains simple enough to explain in one equation.
 
 ## Comparison
 
@@ -93,7 +109,8 @@ This option is selected because it is easy to explain verbally: normal, busy, hi
 | --- | --- | --- | --- |
 | Linear | Most transparent and easiest to reproduce. | Understates high-load overhead. | Baseline capacity model. |
 | Saturation curve | Smooth and close to real performance degradation. | Requires selecting `knee`, `alpha`, and `power`. | Official report figure and sensitivity analysis. |
-| Piecewise tiers | Easy to explain with load bands. | Tier boundaries are artificial. | Selected model for the report and calculator. |
+| Piecewise tiers | Easy to explain with load bands. | Tier boundaries are artificial. | Operational explanation only. |
+| Smooth convex curve | Smooth, compact, and visibly nonlinear. | Requires calibrating `alpha` with deployment data. | Selected model for the report and calculator. |
 
 ## Selection Criteria
 
@@ -104,5 +121,6 @@ The final model should be selected based on the intended message:
 | Keep the paper conservative and simple. | Linear model |
 | Show realistic high-load curvature while keeping formulas compact. | Saturation curve |
 | Explain operational bands to non-technical reviewers. | Piecewise tiers |
+| Avoid artificial bend points while keeping the formula easy. | Smooth convex curve |
 
-For the agentic core resource paper, the selected model is piecewise tiers because the formulas are simple enough for management review while still showing nonlinear high-load behavior.
+For the agentic core resource paper, the selected model is the smooth convex curve because it avoids artificial slope-change points while still showing nonlinear high-load behavior.

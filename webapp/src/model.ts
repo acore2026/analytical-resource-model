@@ -2,6 +2,7 @@ import { EVENTS } from "./config.js";
 import type { EventDefinition, EventLoad, Result, SystemStatus } from "./types.js";
 
 export type NumericInput = (id: string) => number;
+const NONLINEAR_ALPHA = 0.15;
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -16,36 +17,12 @@ function queueDelayMs(util: number, serviceMs: number): number {
 function effectiveLoadMultiplier(load: number): number {
   const boundedLoad = Math.max(0, load);
   if (boundedLoad === 0) return 1;
-  return continuousEffectiveLoad(boundedLoad) / boundedLoad;
+  return convexEffectiveLoad(boundedLoad) / boundedLoad;
 }
 
-function loadBand(load: number): number {
+function convexEffectiveLoad(load: number): number {
   const boundedLoad = Math.max(0, load);
-  if (boundedLoad < 0.6) return 0;
-  if (boundedLoad < 0.8) return 1;
-  if (boundedLoad < 0.9) return 2;
-  return 3;
-}
-
-function continuousEffectiveLoad(load: number): number {
-  const boundedLoad = Math.max(0, load);
-  const segments = [
-    { upper: 0.6, slope: 1.0 },
-    { upper: 0.8, slope: 1.15 },
-    { upper: 0.9, slope: 1.35 },
-    { upper: Infinity, slope: 1.6 }
-  ];
-  let effective = 0;
-  let lower = 0;
-  for (const segment of segments) {
-    const segmentUpper = Math.min(boundedLoad, segment.upper);
-    if (segmentUpper > lower) {
-      effective += (segmentUpper - lower) * segment.slope;
-    }
-    if (boundedLoad < segment.upper) break;
-    lower = segment.upper;
-  }
-  return effective;
+  return boundedLoad + NONLINEAR_ALPHA * boundedLoad * boundedLoad;
 }
 
 export function classifyStatus(util: number, degraded = 0.7, highRisk = 0.85): SystemStatus {
@@ -106,7 +83,6 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
   const cpuCores = Math.max(1, num("cpuCores"));
   const linearCpuCoreDemand = totalRps * linearCpuMsPerRequest / 1000;
   const linearCpuUtil = linearCpuCoreDemand / cpuCores;
-  const cpuLoadBand = loadBand(linearCpuUtil);
   const cpuNonlinearMultiplier = effectiveLoadMultiplier(linearCpuUtil);
   const cpuMsPerRequest = linearCpuMsPerRequest * cpuNonlinearMultiplier;
   const cpuCoreDemand = totalRps * cpuMsPerRequest / 1000;
@@ -116,7 +92,6 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
   const bandwidthKbPerRequest = baseBandwidthAvg + actualIntentShare * Math.max(0, num("intentBandwidthKb"));
   const linearNetworkGbps = totalRps * bandwidthKbPerRequest * 8 / 1000000;
   const linearNetworkUtil = linearNetworkGbps / Math.max(1, num("nicGbps"));
-  const networkLoadBand = loadBand(linearNetworkUtil);
   const networkNonlinearMultiplier = effectiveLoadMultiplier(linearNetworkUtil);
   const networkGbps = linearNetworkGbps * networkNonlinearMultiplier;
   const networkUtil = networkGbps / Math.max(1, num("nicGbps"));
@@ -134,7 +109,6 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
   const qwen3RequestRps = intentRps * qwen3InvocationRatio;
   const qwen3TokenDemand = qwen3RequestRps * qwen3TokensPerRequest;
   const qwen3RawUtil = qwen3ClusterCapacity > 0 ? qwen3TokenDemand / qwen3ClusterCapacity : 0;
-  const qwen3LoadBand = loadBand(qwen3RawUtil);
   const qwen3NonlinearMultiplier = effectiveLoadMultiplier(qwen3RawUtil);
   const qwen3EffectiveTokenDemand = qwen3TokenDemand * qwen3NonlinearMultiplier;
   const npuUtil = qwen3ClusterCapacity > 0 ? qwen3EffectiveTokenDemand / qwen3ClusterCapacity : 0;
@@ -188,7 +162,6 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
     actualIntentShare,
     intentRps,
     cpuMsPerRequest,
-    cpuLoadBand,
     cpuNonlinearMultiplier,
     cpuCoreDemand,
     cpuUtil,
@@ -199,14 +172,12 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
     qwen3RequestRps,
     qwen3TokenDemand,
     qwen3RawUtil,
-    qwen3LoadBand,
     qwen3NonlinearMultiplier,
     qwen3EffectiveTokenDemand,
     qwen3AvailableReplicas,
     npuHbmGb,
     npuHbmUtil,
     networkGbps,
-    networkLoadBand,
     networkNonlinearMultiplier,
     networkUtil,
     meanLatency,

@@ -23,6 +23,10 @@ def saturation_multiplier(load: float, knee: float = 0.60, alpha: float = 0.60, 
     return 1.0 + alpha * normalized_excess**power
 
 
+def convex_effective_load(load: float, alpha: float = 0.15) -> float:
+    return load + alpha * load * load
+
+
 def main() -> None:
     import matplotlib.pyplot as plt  # type: ignore
 
@@ -34,11 +38,13 @@ def main() -> None:
     linear = loads
     saturation = [load * saturation_multiplier(load) for load in loads]
     piecewise = [load * piecewise_multiplier(load) for load in loads]
+    convex = [convex_effective_load(load) for load in loads]
 
     plt.figure(figsize=(7.4, 4.4))
     plt.plot(x, linear, linewidth=2.6, label="Linear model", color="#1769d1")
     plt.plot(x, saturation, linewidth=3.0, label="Saturation curve", color="#d66a00")
     plt.plot(x, piecewise, linewidth=2.6, label="Piecewise tiers", color="#3c8b4a")
+    plt.plot(x, convex, linewidth=3.0, label="Selected convex curve", color="#9b3fb7")
     plt.axvline(60, color="#7b827c", linestyle="--", linewidth=1.2, label="Band boundary")
     plt.axvline(80, color="#7b827c", linestyle="--", linewidth=1.0)
     plt.axvline(90, color="#7b827c", linestyle="--", linewidth=1.0)

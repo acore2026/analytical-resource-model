@@ -175,7 +175,7 @@
             </label>
           </div>
           <p class="source-note band-note">
-            <span data-i18n="loadBandNote">Nonlinear overhead uses fixed load bands: normal below 60%, busy at 60-80%, high load at 80-90%, and critical above 90%.</span>
+            <span data-i18n="loadBandNote">Nonlinear overhead uses a smooth convex curve: effective load = raw load + 0.15 x raw load squared.</span>
           </p>
 
           <div class="panel-title secondary">
@@ -246,7 +246,7 @@
               <span class="panel-code">05</span>
               <h2 data-i18n="intentSweep">Intent Sweep</h2>
             </div>
-            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share across all request types, sampled every 1 percentage point. This is a continuous load-band model; slope changes appear when CPU, network, or NPU enters a new load band.</p>
+            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share across all request types, sampled every 1 percentage point. The convex nonlinear model adds contention overhead as load grows, so utilization curves bend upward instead of remaining straight.</p>
             <div class="chart-frame">
               <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU / Network / NPU util (%)</div>
               <canvas id="sweepChart" width="920" height="360" aria-label="Intent sweep chart"></canvas>
@@ -259,7 +259,7 @@
               <span class="panel-code">06</span>
               <h2 data-i18n="userCountSweep">User Count Sensitivity</h2>
             </div>
-            <p class="chart-description" data-i18n="userCountSweepDescription">Intent ratio is fixed at 20%. User count is swept from 0.5M to 4.0M; continuous nonlinear load bands add overhead as the system moves from normal to busy, high-load, and critical operation. The NPU line shows inference-resource utilization.</p>
+            <p class="chart-description" data-i18n="userCountSweepDescription">Intent ratio is fixed at 20%. User count is swept from 0.5M to 4.0M. The convex nonlinear model adds contention overhead as service volume grows; the NPU line shows inference-resource utilization.</p>
             <div class="chart-frame">
               <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU / Network / NPU util (%)</div>
               <canvas id="userCountChart" width="920" height="360" aria-label="User count sensitivity chart"></canvas>
