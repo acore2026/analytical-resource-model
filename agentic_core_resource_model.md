@@ -42,7 +42,7 @@ The baseline uses $N_{\mathrm{user}}=3.6\times10^6$ users and $2$ PDU sessions/u
 | RAM capacity | 256 GB |
 | Inference runtime | vLLM Ascend 0.11.0 |
 | Intent inference model | Qwen3-30B-A3B |
-| Configured Qwen3 NPU cluster | 128 NPUs |
+| Configured NPU cluster for Qwen3 serving | 128 NPUs |
 | Qwen3 invocation ratio | 10% of intent requests |
 | Qwen3 token profile | 128 input tokens + 4 output tokens = 132 tokens/request |
 | Qwen3 token capacity | 15,040 tokens/s/replica |
@@ -74,7 +74,7 @@ $$
 T_Q = \lambda_Q \cdot \left(L_{\mathrm{in}} + L_{\mathrm{out}}\right)
 $$
 
-The configured Qwen3 cluster has $N_Q=128$ NPUs. The number of available Qwen3 replicas and token capacity are:
+The configured NPU cluster for Qwen3 serving has $N_Q=128$ NPUs. The number of available Qwen3 replicas and token capacity are:
 
 $$
 R_{Q,\mathrm{avail}} = \left\lfloor \frac{N_Q}{TP_Q} \right\rfloor
@@ -118,7 +118,7 @@ The nonlinear multiplier represents the reduction of effective serving efficienc
 | Resource area | Nonlinear factor | Effect represented in the model |
 | --- | --- | --- |
 | CPU | Scheduler overhead, lock contention, cache misses, memory access delay, serialization/deserialization, and state-store pressure. | Effective CPU-ms/request increases in higher CPU load bands. |
-| Qwen3/NPU serving | Batching inefficiency, request routing, replica scheduling, runtime coordination, cross-replica overhead, and KV/cache memory pressure. | Raw token demand is converted into effective token demand before calculating utilization of the configured NPU cluster. |
+| NPU serving for Qwen3 | Batching inefficiency, request routing, replica scheduling, runtime coordination, cross-replica overhead, and KV/cache memory pressure. | Raw token demand is converted into effective token demand before calculating utilization of the configured NPU cluster. |
 | Network | Queueing, buffering, congestion-control behavior, retransmission risk, and additional control-plane coordination. | Effective bandwidth and network delay increase in higher network load bands. |
 | Latency | CPU queueing, NPU queueing, network queueing, and tail-latency amplification. | Mean, p95, and p99 latency rise faster as utilization approaches saturation. |
 
@@ -158,7 +158,7 @@ $$
 
 The table fixes the user population, event frequencies, and Qwen3 cluster size, then varies the percentage of all requests that carry intent in constant $10\%$ steps. The visible results use the piecewise nonlinear load-band model.
 
-| Intent ratio | Total intent share | Intent rps | Qwen3 rps | Effective Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | Qwen3/NPU util | Network bandwidth | Mean latency | p95 latency | Status |
+| Intent ratio | Total intent share | Intent rps | Qwen3 rps | Effective Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | NPU util | Network bandwidth | Mean latency | p95 latency | Status |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 0% | 0.0% | 0 | 0 | 0 | 180.3 | 70.4% | 53.402 Gbps | 0.0% | 6.779 Gbps | 24.6 ms | 141.9 ms | degraded |
 | 10% | 10.0% | 10,430 | 1,043 | 137,676 | 200.7 | 78.4% | 90.783 Gbps | 28.6% | 7.780 Gbps | 28.1 ms | 231.8 ms | degraded |
@@ -177,13 +177,13 @@ Generated results are available in `outputs/agentic_resource_results.csv`. The u
 ![](outputs/agentic_resource_utilization.png)
 ![](outputs/agentic_latency.png)
 
-The following user-count sensitivity figure fixes the intent ratio at $20\%$ and varies the user population.
+The following user-count sensitivity figure fixes the intent ratio at $20\%$ and varies the user population from $0.5$ million to $4.0$ million users.
 
 ![](outputs/agentic_user_count_sensitivity.png)
 
 ## Interpretation
 
-With $128$ configured Qwen3 NPUs and $10\%$ Qwen3 invocation ratio, Qwen3/NPU utilization is $28.6\%$ at $10\%$ intent ratio and $57.2\%$ at $20\%$ intent ratio. At $30\%$ intent ratio, Qwen3/NPU utilization exceeds $100\%$, so the fixed NPU cluster is overloaded. Higher intent ratios require more NPU capacity, lower Qwen3 invocation ratio, shorter token profiles, faster serving, or admission control.
+With $128$ configured NPUs assigned to Qwen3 serving and $10\%$ Qwen3 invocation ratio, NPU utilization is $28.6\%$ at $10\%$ intent ratio and $57.2\%$ at $20\%$ intent ratio. At $30\%$ intent ratio, NPU utilization exceeds $100\%$, so the fixed NPU cluster is overloaded. Higher intent ratios require more NPU capacity, lower Qwen3 invocation ratio, shorter token profiles, faster serving, or admission control.
 
 ## Model Boundary
 

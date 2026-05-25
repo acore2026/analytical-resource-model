@@ -61,12 +61,12 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
         [float(r["npu_utilization"]) * 100.0 for r in rows],
         marker="^",
         color=NPU_COLOR,
-        label="Qwen3/NPU util",
+        label="NPU util",
     )
     ax_util.axhline(70, color="tab:gray", linestyle="--", linewidth=1, label="70% utilization")
     ax_util.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
     ax_util.set_xlabel("Intent ratio across all requests (%)")
-    ax_util.set_ylabel("CPU / Network / Qwen3 utilization (%)")
+    ax_util.set_ylabel("CPU / Network / NPU utilization (%)")
     ax_util.set_title("Piecewise nonlinear utilization vs. intent ratio")
     ax_util.grid(True, alpha=0.3)
     lines = [cpu_line, net_line, npu_line]
@@ -122,12 +122,12 @@ def maybe_write_user_count_plot(config: ModelConfig, out_dir: Path) -> None:
         [float(r["npu_utilization"]) * 100.0 for r in rows],
         marker="^",
         color=NPU_COLOR,
-        label="Qwen3/NPU util",
+        label="NPU util",
     )
     ax_util.axhline(70, color="tab:gray", linestyle="--", linewidth=1, label="70% utilization")
     ax_util.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
     ax_util.set_xlabel("User count (million users)")
-    ax_util.set_ylabel("CPU / Network / Qwen3 utilization (%)")
+    ax_util.set_ylabel("CPU / Network / NPU utilization (%)")
     ax_util.set_title("Piecewise nonlinear utilization vs. user count (20% intent)")
     ax_util.grid(True, alpha=0.3)
     lines = [cpu_line, net_line, npu_line]

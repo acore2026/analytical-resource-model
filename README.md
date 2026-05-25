@@ -1,6 +1,6 @@
 # Agentic Core Resource Model
 
-This repository contains an analytical resource model for an agentic 6G core control-plane architecture. It is designed for paper preparation and capacity discussion, not as a deployment benchmark. The model estimates request volume, CPU cost, memory traffic, Qwen3/NPU utilization, network bandwidth, and latency under different user counts and intent ratios.
+This repository contains an analytical resource model for an agentic 6G core control-plane architecture. It is designed for paper preparation and capacity discussion, not as a deployment benchmark. The model estimates request volume, CPU cost, memory traffic, NPU utilization, network bandwidth, and latency under different user counts and intent ratios.
 
 ## What Is Included
 
@@ -23,7 +23,7 @@ The model starts from:
 4. Qwen3 invocation ratio for intent requests.
 5. Resource assumptions for CPU, memory, NPU, bandwidth, and latency.
 
-It then calculates request rate, intent request rate, Qwen3 token demand, effective nonlinear overhead by load band, CPU utilization, Qwen3/NPU utilization against a configured NPU cluster, network utilization, and latency.
+It then calculates request rate, intent request rate, Qwen3 token demand, effective nonlinear overhead by load band, CPU utilization, NPU utilization against a configured cluster, network utilization, and latency.
 
 ## Run the Python Model
 
@@ -81,7 +81,7 @@ Open:
 http://127.0.0.1:7108/
 ```
 
-The web app lets you tune user count, per-user request frequencies, intent ratio, CPU capacity, RAM, network capacity, Qwen3 token settings, configured Qwen3 NPU count, and agent cost assumptions. Results update in the browser.
+The web app lets you tune user count, per-user request frequencies, intent ratio, CPU capacity, RAM, network capacity, Qwen3 token settings, configured NPU count for Qwen3 serving, and agent cost assumptions. Results update in the browser.
 
 ## Editing Guidance
 

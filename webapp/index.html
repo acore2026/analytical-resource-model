@@ -150,7 +150,7 @@
               <input id="npuHbmPerNpuGb" type="number" min="1" step="1" value="32">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="qwen3NpuCount">Qwen3 NPU count</span> <span class="unit">(NPUs)</span><span class="help" data-tip-key="qwen3NpuCountTip" data-tip="Configured NPUs available for Qwen3 serving. Utilization is calculated against this fixed cluster size.">?</span></span>
+              <span class="label-line"><span data-i18n="qwen3NpuCount">NPU count</span> <span class="unit">(NPUs)</span><span class="help" data-tip-key="qwen3NpuCountTip" data-tip="Configured NPUs available for Qwen3 serving. Utilization is calculated against this fixed cluster size.">?</span></span>
               <input id="qwen3NpuCount" type="number" min="0" step="1" value="128">
             </label>
             <label class="field compact">
@@ -218,7 +218,7 @@
               <div class="bar"><i id="ramBar"></i></div>
             </article>
             <article class="metric">
-              <span data-i18n="qwen3LoadMetric">Qwen3/NPU util (%)</span>
+              <span data-i18n="qwen3LoadMetric">NPU util (%)</span>
               <strong id="npuDemand">--</strong>
               <div class="bar"><i id="npuBar"></i></div>
             </article>
@@ -246,9 +246,9 @@
               <span class="panel-code">05</span>
               <h2 data-i18n="intentSweep">Intent Sweep</h2>
             </div>
-            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share across all request types, sampled every 10 percentage points. Results use fixed nonlinear load bands. Y-axis: CPU, network, and Qwen3/NPU utilization.</p>
+            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share across all request types, sampled every 10 percentage points. Results use fixed nonlinear load bands. Y-axis: CPU, network, and NPU utilization.</p>
             <div class="chart-frame">
-              <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU / Network / Qwen3 util (%)</div>
+              <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU / Network / NPU util (%)</div>
               <canvas id="sweepChart" width="920" height="360" aria-label="Intent sweep chart"></canvas>
               <div class="axis-label x-axis" data-i18n="xAxisLabel">Intent ratio (%)</div>
             </div>
@@ -259,9 +259,9 @@
               <span class="panel-code">06</span>
               <h2 data-i18n="userCountSweep">User Count Sensitivity</h2>
             </div>
-            <p class="chart-description" data-i18n="userCountSweepDescription">Intent ratio is fixed at 20%. Fixed nonlinear load bands add overhead as the system moves from normal to busy, high-load, and critical operation; Qwen3 line shows NPU utilization.</p>
+            <p class="chart-description" data-i18n="userCountSweepDescription">Intent ratio is fixed at 20%. User count is swept from 0.5M to 4.0M; fixed nonlinear load bands add overhead as the system moves from normal to busy, high-load, and critical operation. The NPU line shows inference-resource utilization.</p>
             <div class="chart-frame">
-              <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU / Network / Qwen3 util (%)</div>
+              <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU / Network / NPU util (%)</div>
               <canvas id="userCountChart" width="920" height="360" aria-label="User count sensitivity chart"></canvas>
               <div class="axis-label x-axis" data-i18n="userCountXAxisLabel">User count (million users)</div>
             </div>
@@ -281,7 +281,7 @@
                     <th data-i18n="tableIntentRate">Intent rate (req/s)</th>
                     <th data-i18n="tableTokens">Effective Qwen3 tokens/s</th>
                     <th data-i18n="tableCpuUtil">CPU util (%)</th>
-                    <th data-i18n="tableNpuUtil">Qwen3 util (%)</th>
+                    <th data-i18n="tableNpuUtil">NPU util (%)</th>
                     <th data-i18n="tableBw">BW (Gbps)</th>
                     <th data-i18n="tableMean">Mean (ms)</th>
                     <th data-i18n="tableStatus">Status</th>

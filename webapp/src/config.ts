@@ -34,7 +34,16 @@ export const EVENTS: EventDefinition[] = [
 ];
 
 export const SWEEP = Array.from({ length: 11 }, (_, index) => index * 10);
-export const USER_COUNT_SWEEP = [100000, 1000000, 3600000, 5000000, 10000000];
+export const USER_COUNT_SWEEP = [
+  500000,
+  1000000,
+  1500000,
+  2000000,
+  2500000,
+  3000000,
+  3500000,
+  4000000
+];
 export const USER_COUNT_SWEEP_INTENT_RATIO = 20;
 export const MODEL_INPUT_IDS = [
   "userCount",
