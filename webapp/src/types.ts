@@ -54,6 +54,7 @@ export interface Result {
   actualIntentShare: number;
   intentRps: number;
   cpuMsPerRequest: number;
+  cpuNonlinearMultiplier: number;
   cpuCoreDemand: number;
   cpuUtil: number;
   ramGb: number;
@@ -63,11 +64,13 @@ export interface Result {
   qwen3RequestRps: number;
   qwen3TokenDemand: number;
   qwen3RawUtil: number;
+  qwen3NonlinearMultiplier: number;
   qwen3EffectiveTokenDemand: number;
   qwen3AvailableReplicas: number;
   npuHbmGb: number;
   npuHbmUtil: number;
   networkGbps: number;
+  networkNonlinearMultiplier: number;
   networkUtil: number;
   meanLatency: number;
   p95Latency: number;

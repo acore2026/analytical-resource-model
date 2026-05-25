@@ -79,7 +79,8 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
   const cpuCores = Math.max(1, num("cpuCores"));
   const linearCpuCoreDemand = totalRps * linearCpuMsPerRequest / 1000;
   const linearCpuUtil = linearCpuCoreDemand / cpuCores;
-  const cpuMsPerRequest = linearCpuMsPerRequest * piecewiseMultiplier(linearCpuUtil);
+  const cpuNonlinearMultiplier = piecewiseMultiplier(linearCpuUtil);
+  const cpuMsPerRequest = linearCpuMsPerRequest * cpuNonlinearMultiplier;
   const cpuCoreDemand = totalRps * cpuMsPerRequest / 1000;
   const cpuUtil = cpuCoreDemand / cpuCores;
   const cpuDelay = queueDelayMs(cpuUtil, cpuMsPerRequest);
@@ -87,7 +88,8 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
   const bandwidthKbPerRequest = baseBandwidthAvg + actualIntentShare * Math.max(0, num("intentBandwidthKb"));
   const linearNetworkGbps = totalRps * bandwidthKbPerRequest * 8 / 1000000;
   const linearNetworkUtil = linearNetworkGbps / Math.max(1, num("nicGbps"));
-  const networkGbps = linearNetworkGbps * piecewiseMultiplier(linearNetworkUtil);
+  const networkNonlinearMultiplier = piecewiseMultiplier(linearNetworkUtil);
+  const networkGbps = linearNetworkGbps * networkNonlinearMultiplier;
   const networkUtil = networkGbps / Math.max(1, num("nicGbps"));
   const networkDelay = queueDelayMs(networkUtil, 0.1);
 
@@ -103,7 +105,8 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
   const qwen3RequestRps = intentRps * qwen3InvocationRatio;
   const qwen3TokenDemand = qwen3RequestRps * qwen3TokensPerRequest;
   const qwen3RawUtil = qwen3ClusterCapacity > 0 ? qwen3TokenDemand / qwen3ClusterCapacity : 0;
-  const qwen3EffectiveTokenDemand = qwen3TokenDemand * piecewiseMultiplier(qwen3RawUtil);
+  const qwen3NonlinearMultiplier = piecewiseMultiplier(qwen3RawUtil);
+  const qwen3EffectiveTokenDemand = qwen3TokenDemand * qwen3NonlinearMultiplier;
   const npuUtil = qwen3ClusterCapacity > 0 ? qwen3EffectiveTokenDemand / qwen3ClusterCapacity : 0;
   const npuQueueDelay = qwen3ClusterCapacity > 0 ? queueDelayMs(npuUtil, 1000 / qwen3ClusterCapacity) : 0;
   const qwen3Latency = Math.max(0, num("qwen3LatencyMs")) + npuQueueDelay;
@@ -155,6 +158,7 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
     actualIntentShare,
     intentRps,
     cpuMsPerRequest,
+    cpuNonlinearMultiplier,
     cpuCoreDemand,
     cpuUtil,
     ramGb,
@@ -164,11 +168,13 @@ export function evaluate(num: NumericInput, intentRatioPercent = num("intentRati
     qwen3RequestRps,
     qwen3TokenDemand,
     qwen3RawUtil,
+    qwen3NonlinearMultiplier,
     qwen3EffectiveTokenDemand,
     qwen3AvailableReplicas,
     npuHbmGb,
     npuHbmUtil,
     networkGbps,
+    networkNonlinearMultiplier,
     networkUtil,
     meanLatency,
     p95Latency,

@@ -14,6 +14,13 @@ from agentic_model_core import evaluate, fmt
 CPU_COLOR = "#2a7f3e"
 NETWORK_COLOR = "#1f77b4"
 NPU_COLOR = "#d66a00"
+TRANSITION_COLOR = "#5f6661"
+
+TRANSITION_SERIES = (
+    ("cpu_nonlinear_multiplier", "CPU"),
+    ("qwen3_nonlinear_multiplier", "NPU"),
+    ("network_nonlinear_multiplier", "Network"),
+)
 
 def write_csv(rows: Iterable[Dict[str, float | str]], path: Path) -> None:
     rows = list(rows)
@@ -23,6 +30,18 @@ def write_csv(rows: Iterable[Dict[str, float | str]], path: Path) -> None:
         writer.writeheader()
         for row in rows:
             writer.writerow({key: fmt(value) if isinstance(value, float) else value for key, value in row.items()})
+
+
+def transition_groups(rows: List[Dict[str, float | str]]) -> List[tuple[float, str]]:
+    groups: Dict[float, List[str]] = {}
+    for index in range(1, len(rows)):
+        previous = rows[index - 1]
+        current = rows[index]
+        ratio = round(100.0 * float(current["intent_ratio"]))
+        for key, label in TRANSITION_SERIES:
+            if float(previous[key]) != float(current[key]):
+                groups.setdefault(ratio, []).append(label)
+    return [(ratio, "+".join(labels)) for ratio, labels in sorted(groups.items())]
 
 
 def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None:
@@ -68,9 +87,35 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
     )
     ax_util.axhline(70, color="tab:gray", linestyle="--", linewidth=1, label="70% utilization")
     ax_util.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
+    for ratio, label in transition_groups(rows):
+        ax_util.axvline(ratio, color=TRANSITION_COLOR, linestyle=":", linewidth=1.2, alpha=0.8)
+        ax_util.annotate(
+            f"{label} band",
+            xy=(ratio, 1.0),
+            xycoords=("data", "axes fraction"),
+            xytext=(0, -18),
+            textcoords="offset points",
+            rotation=90,
+            ha="center",
+            va="top",
+            fontsize=7,
+            color=TRANSITION_COLOR,
+            bbox={"boxstyle": "round,pad=0.18", "fc": "white", "ec": "none", "alpha": 0.75},
+        )
     ax_util.set_xlabel("Intent ratio across all requests (%)")
     ax_util.set_ylabel("CPU / Network / NPU utilization (%)")
-    ax_util.set_title("Piecewise nonlinear utilization vs. intent ratio")
+    ax_util.set_title("Piecewise load-band utilization vs. intent ratio")
+    ax_util.text(
+        0.99,
+        0.03,
+        "Corners mark load-band transitions.",
+        transform=ax_util.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=8,
+        color=TRANSITION_COLOR,
+        bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": TRANSITION_COLOR, "alpha": 0.72},
+    )
     ax_util.grid(True, alpha=0.3)
     lines = [cpu_line, net_line, npu_line]
     labels = [line.get_label() for line in lines]
@@ -131,7 +176,7 @@ def maybe_write_user_count_plot(config: ModelConfig, out_dir: Path) -> None:
     ax_util.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
     ax_util.set_xlabel("User count (million users)")
     ax_util.set_ylabel("CPU / Network / NPU utilization (%)")
-    ax_util.set_title("Piecewise nonlinear utilization vs. user count (20% intent)")
+    ax_util.set_title("Piecewise load-band utilization vs. user count (20% intent)")
     ax_util.grid(True, alpha=0.3)
     lines = [cpu_line, net_line, npu_line]
     labels = [line.get_label() for line in lines]
