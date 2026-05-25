@@ -31,6 +31,8 @@ const EVENTS = [
     { key: "paging", inputId: "eventPaging", labelKey: "paging", tipKey: "pagingTip", perUserPerHour: 14.0, baseLatencyMs: 12, baseCpuMs: 0.6, baseBandwidthKb: 4 }
 ];
 const SWEEP = [0, 1, 5, 10, 20, 50, 100];
+const USER_COUNT_SWEEP = [100000, 1000000, 3600000, 5000000, 10000000];
+const USER_COUNT_SWEEP_INTENT_RATIO = 20;
 const MODEL_INPUT_IDS = [
     "userCount",
     "pduSessionsPerUser",
@@ -111,6 +113,10 @@ const I18N = {
         xAxisLabel: "Intent ratio (%)",
         yAxisLabel: "CPU/Network util (%) · Qwen3 NPUs",
         intentSweepAria: "Line chart showing CPU utilization, network utilization, and required Qwen3 NPU count by intent ratio.",
+        userCountSweep: "User Count Sensitivity",
+        userCountSweepDescription: "Intent ratio is fixed at 20%. CPU and network lines show utilization; Qwen3 line shows required NPU count.",
+        userCountXAxisLabel: "User count (million users)",
+        userCountSweepAria: "Line chart showing CPU utilization, network utilization, and required Qwen3 NPU count by user count at 20% intent ratio.",
         calculatedSweep: "Calculated Sweep",
         tableIntentRatio: "Intent ratio (%)",
         tableTotalIntent: "Total intent (%)",
@@ -228,6 +234,10 @@ const I18N = {
         xAxisLabel: "意图比例（%）",
         yAxisLabel: "CPU/网络利用率（%）· Qwen3 NPU 数",
         intentSweepAria: "折线图，展示不同意图比例下的 CPU 利用率、网络利用率和所需 Qwen3 NPU 数量。",
+        userCountSweep: "用户规模敏感性",
+        userCountSweepDescription: "意图比例固定为 20%。CPU 和网络折线表示利用率；Qwen3 折线表示所需 NPU 数量。",
+        userCountXAxisLabel: "用户数（百万）",
+        userCountSweepAria: "折线图，展示 20% 意图比例下不同用户规模对应的 CPU 利用率、网络利用率和所需 Qwen3 NPU 数量。",
         calculatedSweep: "计算结果扫描",
         tableIntentRatio: "意图比例（%）",
         tableTotalIntent: "总意图比例（%）",
@@ -338,8 +348,8 @@ function pct(value, digits = 1) {
         return "unstable";
     return `${(value * 100).toFixed(digits)}%`;
 }
-function eventLoads() {
-    const users = Math.max(0, num("userCount"));
+function eventLoads(userCountOverride = num("userCount")) {
+    const users = Math.max(0, userCountOverride);
     return EVENTS.map((event) => {
         const perUserPerHour = Math.max(0, num(event.inputId));
         return {
@@ -357,8 +367,8 @@ function weightedAverage(events, totalRps, key) {
         return typeof value === "number" ? sum + event.rps * value : sum;
     }, 0) / totalRps;
 }
-function evaluate(intentRatioPercent = num("intentRatio")) {
-    const events = eventLoads();
+function evaluate(intentRatioPercent = num("intentRatio"), userCountOverride = num("userCount")) {
+    const events = eventLoads(userCountOverride);
     const totalRps = events.reduce((sum, event) => sum + event.rps, 0);
     const intentCandidateRps = totalRps;
     const intentRatio = clamp(intentRatioPercent / 100, 0, 1);
@@ -635,6 +645,106 @@ function drawChart(rows) {
         legendX += item.label.length > 14 ? 190 : 120;
     }
 }
+function drawUserCountChart() {
+    const canvas = mustGet("userCountChart");
+    const ctx = canvas.getContext("2d");
+    if (!ctx)
+        return;
+    const rows = USER_COUNT_SWEEP.map((users) => evaluate(USER_COUNT_SWEEP_INTENT_RATIO, users));
+    const width = canvas.width;
+    const height = canvas.height;
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = "#fbfcf8";
+    ctx.fillRect(0, 0, width, height);
+    const pad = { left: 64, right: 88, top: 24, bottom: 44 };
+    const plotW = width - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+    const x = (index) => pad.left + (index / (rows.length - 1)) * plotW;
+    const y = (value, max) => pad.top + plotH - (clamp(value, 0, max) / max) * plotH;
+    const finiteUtils = rows.flatMap((row) => [row.cpuUtil, row.networkUtil]).filter(Number.isFinite);
+    const maxUtil = Math.max(1.1, ...finiteUtils);
+    const maxNpus = Math.max(10, Math.ceil(Math.max(...rows.map((row) => row.requiredProductionNpus)) / 100) * 100);
+    ctx.strokeStyle = "#d7ddd3";
+    ctx.lineWidth = 1;
+    ctx.fillStyle = "#5f6a61";
+    ctx.font = "18px Aptos, Segoe UI, sans-serif";
+    ctx.textAlign = "left";
+    for (let i = 0; i <= 4; i += 1) {
+        const gy = pad.top + (i / 4) * plotH;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, gy);
+        ctx.lineTo(width - pad.right, gy);
+        ctx.stroke();
+        ctx.fillText(`${Math.round((1 - i / 4) * maxUtil * 100)}%`, 10, gy + 6);
+        ctx.textAlign = "right";
+        ctx.fillText(`${Math.round((1 - i / 4) * maxNpus)}`, width - 12, gy + 6);
+        ctx.textAlign = "left";
+    }
+    const utilSeries = [
+        { key: "cpuUtil", label: t("cpu"), color: "#3c8b4a" },
+        { key: "networkUtil", label: t("network"), color: "#1769d1" }
+    ];
+    for (const item of utilSeries) {
+        ctx.strokeStyle = item.color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        rows.forEach((row, index) => {
+            const pointX = x(index);
+            const pointY = y(row[item.key], maxUtil);
+            if (index === 0)
+                ctx.moveTo(pointX, pointY);
+            else
+                ctx.lineTo(pointX, pointY);
+        });
+        ctx.stroke();
+        rows.forEach((row, index) => {
+            ctx.fillStyle = item.color;
+            ctx.fillRect(x(index) - 4, y(row[item.key], maxUtil) - 4, 8, 8);
+        });
+    }
+    ctx.strokeStyle = "#d66a00";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    rows.forEach((row, index) => {
+        const pointX = x(index);
+        const pointY = y(row.requiredProductionNpus, maxNpus);
+        if (index === 0)
+            ctx.moveTo(pointX, pointY);
+        else
+            ctx.lineTo(pointX, pointY);
+    });
+    ctx.stroke();
+    rows.forEach((row, index) => {
+        ctx.fillStyle = "#d66a00";
+        ctx.fillRect(x(index) - 4, y(row.requiredProductionNpus, maxNpus) - 4, 8, 8);
+    });
+    ctx.strokeStyle = "#c94d41";
+    ctx.setLineDash([10, 8]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y(1, maxUtil));
+    ctx.lineTo(width - pad.right, y(1, maxUtil));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#1d241f";
+    ctx.font = "20px Aptos, Segoe UI, sans-serif";
+    ctx.textAlign = "center";
+    rows.forEach((row, index) => {
+        ctx.fillText(`${fmt(row.totalRps ? USER_COUNT_SWEEP[index] / 1000000 : 0, 1)}M`, x(index), height - 14);
+    });
+    let legendX = pad.left;
+    ctx.textAlign = "left";
+    const legend = [
+        ...utilSeries,
+        { label: t("productionNpuMetric"), color: "#d66a00" }
+    ];
+    for (const item of legend) {
+        ctx.fillStyle = item.color;
+        ctx.fillRect(legendX, 18, 14, 14);
+        ctx.fillStyle = "#1d241f";
+        ctx.fillText(item.label, legendX + 20, 32);
+        legendX += item.label.length > 14 ? 190 : 120;
+    }
+}
 function applyTranslations() {
     document.documentElement.lang = currentLang === "zh" ? "zh-CN" : "en";
     document.querySelectorAll("[data-i18n]").forEach((node) => {
@@ -659,6 +769,7 @@ function applyTranslations() {
         ? "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_easy_explanation_zh.md"
         : "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_easy_explanation.md";
     mustGet("sweepChart").setAttribute("aria-label", t("intentSweepAria"));
+    mustGet("userCountChart").setAttribute("aria-label", t("userCountSweepAria"));
 }
 function recompute() {
     const current = evaluate();
@@ -666,6 +777,7 @@ function recompute() {
     updateSummary(current);
     updateTable(rows);
     drawChart(rows);
+    drawUserCountChart();
 }
 function reset() {
     Object.entries(BASELINE).forEach(([key, value]) => {

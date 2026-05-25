@@ -256,9 +256,22 @@
             </div>
           </div>
 
-          <div class="table-panel">
+          <div class="chart-panel">
             <div class="panel-title inline">
               <span class="panel-code">06</span>
+              <h2 data-i18n="userCountSweep">User Count Sensitivity</h2>
+            </div>
+            <p class="chart-description" data-i18n="userCountSweepDescription">Intent ratio is fixed at 20%. CPU and network lines show utilization; Qwen3 line shows required NPU count.</p>
+            <div class="chart-frame">
+              <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU/Network util (%) · Qwen3 NPUs</div>
+              <canvas id="userCountChart" width="920" height="360" aria-label="User count sensitivity chart"></canvas>
+              <div class="axis-label x-axis" data-i18n="userCountXAxisLabel">User count (million users)</div>
+            </div>
+          </div>
+
+          <div class="table-panel">
+            <div class="panel-title inline">
+              <span class="panel-code">07</span>
               <h2 data-i18n="calculatedSweep">Calculated Sweep</h2>
             </div>
             <div class="table-wrap">
