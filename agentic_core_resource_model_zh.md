@@ -116,6 +116,18 @@ $$
 
 对于非意图请求，增量 Agentic CPU 成本为 $0.30\ CPU\text{-}ms/request$ 。对于携带意图的请求，CPU 侧 Agent 工作量为 $2.00\ CPU\text{-}ms/request$ ，不包含 Qwen3 推理。
 
+在本文中，“增量”表示 NW-Agent 层在传统核心网确定性流程 CPU 成本之外新增的 CPU 工作量。提案说明 NW-Agent 处理携带意图和不携带意图的请求，并且不携带意图的 legacy NAS 消息也可以路由到对应 Agent。因此，非意图请求虽然不需要意图理解、复杂任务规划或 Qwen3 推理，仍然会经过轻量级 Agent 处理路径。
+
+对于流程类型 $i$ ，非意图请求的 CPU 成本建模为：
+
+$$
+C_{\mathrm{nonintent,total},i} = C_{\mathrm{base},i} + C_{\mathrm{agent,nonintent}}
+$$
+
+其中： $C_{\mathrm{nonintent,total},i}$ 表示类型 $i$ 的非意图请求总 CPU 成本； $C_{\mathrm{base},i}$ 表示同一流程的确定性核心网 CPU 成本； $C_{\mathrm{agent,nonintent}}$ 表示轻量级 NW-Agent 额外开销。
+
+轻量级 NW-Agent 额外开销包括请求归一化、识别请求不包含意图容器、请求类型分类、绑定到对应的服务 Agent 或工具路径、基础策略/上下文检查、确定性流程触发准备，以及 Agent 侧状态和追踪信息更新。该开销不包含 Qwen3/NPU 推理、自然语言意图理解、复杂任务拆解或多 Agent 协作。
+
 对于不调用 Qwen3、只使用轻量 Agent 逻辑处理的意图请求，模型将 Agent 侧时延表示为固定意图 Agent 时延加上请求路径中的 CPU 侧 Agent 工作量。
 
 $$

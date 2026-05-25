@@ -116,6 +116,18 @@ Where: $C_Q$ is total Qwen3 serving capacity in tokens/s; $R_{Q,\mathrm{avail}}$
 
 For non-intent requests, incremental agentic CPU cost is $0.30\ CPU\text{-}ms/request$. For intent-bearing requests, CPU-side agent work is $2.00\ CPU\text{-}ms/request$, excluding Qwen3 inference.
 
+In this context, "incremental" means additional CPU work introduced by the NW-Agent layer, beyond the deterministic CPU cost of the normal core-network procedure. The proposal states that NW-Agents handle requests with or without intent, and that legacy NAS messages without intent can still be routed to corresponding agents. Therefore, a non-intent request still has lightweight agent-side processing even though it does not require intent understanding, complex task planning, or Qwen3 inference.
+
+For procedure type $i$, the non-intent CPU cost is modeled as:
+
+$$
+C_{\mathrm{nonintent,total},i} = C_{\mathrm{base},i} + C_{\mathrm{agent,nonintent}}
+$$
+
+Where: $C_{\mathrm{nonintent,total},i}$ is the total CPU cost of a non-intent request of type $i$; $C_{\mathrm{base},i}$ is the deterministic core-network CPU cost of the same procedure; $C_{\mathrm{agent,nonintent}}$ is the lightweight NW-Agent overhead.
+
+The lightweight NW-Agent overhead covers request normalization, detection that no intent container is present, request-type classification, binding to the corresponding service agent or tool path, basic policy/context checks, deterministic procedure trigger preparation, and agent-side state/tracing updates. It does not include Qwen3/NPU inference, natural-language intent interpretation, complex task decomposition, or multi-agent collaboration.
+
 For intent requests handled by lightweight agent logic without Qwen3, the modeled agent-side delay is the fixed intent-agent delay plus CPU-side agent work converted to milliseconds in the request path.
 
 $$
