@@ -16,11 +16,15 @@ $$
 \lambda_i = \frac{N_{\mathrm{user}} \cdot f_i}{3600}
 $$
 
+其中：$\lambda_i$ 表示事件 $i$ 的请求速率，单位为 requests/s；$N_{\mathrm{user}}$ 表示用户数；$f_i$ 表示单用户每小时事件频率，单位为 events/user/hour；$3600$ 用于将一小时换算为秒。
+
 总控制面请求速率是所有建模流程请求速率的总和。
 
 $$
 \lambda_{\mathrm{total}} = \sum_i \lambda_i
 $$
+
+其中：$\lambda_{\mathrm{total}}$ 表示所有建模流程的总请求速率；$\sum_i$ 表示对负载表中的所有事件类型求和；$\lambda_i$ 表示每类事件的请求速率。
 
 基线采用 $N_{\mathrm{user}}=3.6\times10^6$ 用户和 $2$ PDU sessions/user。基线总速率为 $104,300$ requests/s。任意请求类型都可能携带意图，因此意图比例 $\rho_I$ 应用于完整请求流。
 
@@ -72,17 +76,23 @@ $$
 \lambda_I = \rho_I \cdot \lambda_{\mathrm{total}}
 $$
 
+其中：$\lambda_I$ 表示携带意图的请求速率；$\rho_I$ 表示全部请求中的意图比例；$\lambda_{\mathrm{total}}$ 表示总控制面请求速率。
+
 只有配置比例的意图请求会调用 Qwen3，该比例记为 $r_Q$。
 
 $$
 \lambda_Q = \lambda_I \cdot r_Q
 $$
 
+其中：$\lambda_Q$ 表示 Qwen3 请求速率；$\lambda_I$ 表示携带意图的请求速率；$r_Q$ 表示调用 Qwen3 的意图请求比例。
+
 原始 Qwen3 token 需求等于 Qwen3 请求速率乘以输入和输出 token 配置之和。
 
 $$
 T_Q = \lambda_Q \cdot \left(L_{\mathrm{in}} + L_{\mathrm{out}}\right)
 $$
+
+其中：$T_Q$ 表示原始 Qwen3 token 需求，单位为 tokens/s；$\lambda_Q$ 表示 Qwen3 请求速率；$L_{\mathrm{in}}$ 表示每请求输入 token 数；$L_{\mathrm{out}}$ 表示每请求输出 token 数。
 
 用于 Qwen3 服务的 NPU 集群包含 $N_Q=128$ 张 NPU。可用 Qwen3 副本数和 token 容量为：
 
@@ -92,11 +102,15 @@ $$
 R_{Q,\mathrm{avail}} = \left\lfloor \frac{N_Q}{TP_Q} \right\rfloor
 $$
 
+其中：$R_{Q,\mathrm{avail}}$ 表示可用 Qwen3 服务副本数；$N_Q$ 表示配置的 NPU 数；$TP_Q$ 表示张量并行规模，单位为 NPUs/replica；$\lfloor\cdot\rfloor$ 表示向下取整到完整副本数。
+
 总 Qwen3 token 能力等于可用副本数乘以单副本 token 能力 $\mu_Q$。
 
 $$
 C_Q = R_{Q,\mathrm{avail}} \cdot \mu_Q
 $$
+
+其中：$C_Q$ 表示 Qwen3 总服务能力，单位为 tokens/s；$R_{Q,\mathrm{avail}}$ 表示可用副本数；$\mu_Q$ 表示单个 Qwen3 副本的 token 能力，单位为 tokens/s/replica。
 
 ## 1.4 Agentic 成本模型
 
@@ -108,11 +122,15 @@ $$
 D_{\mathrm{intent,light}} = 4\ \mathrm{ms} + 2\ \mathrm{ms}
 $$
 
+其中：$D_{\mathrm{intent,light}}$ 表示轻量意图处理带来的时延；$4\ \mathrm{ms}$ 表示固定意图 Agent 时延；$2\ \mathrm{ms}$ 表示请求路径中的 CPU 侧 Agent 工作量。
+
 对于调用 Qwen3 的意图请求，基础 Qwen3 服务时间建模为排队前 $8\ \mathrm{ms/request}$。当 NPU 利用率升高时，排队时延会在后续时延模型中叠加。
 
 $$
 D_{Q,\mathrm{service}} = 8\ \mathrm{ms/request}
 $$
+
+其中：$D_{Q,\mathrm{service}}$ 表示排队前的 Qwen3 基础推理服务时间；$8\ \mathrm{ms/request}$ 是复杂意图请求使用的分析型服务时间假设。
 
 携带意图请求额外增加 $12\ \mathrm{KB/request}$ 控制面元数据，用于意图容器、任务元数据、工具调用封装以及 Agent 间状态/追踪元数据。
 
@@ -125,6 +143,8 @@ $$
 $$
 F(u)=u+\alpha u^2,\quad \alpha=0.15
 $$
+
+其中：$F(u)$ 表示加入非线性开销后的有效利用率；$u$ 表示加入开销前的原始线性利用率；$\alpha$ 表示非线性开销系数；$\alpha=0.15$ 是默认的中等开销假设。
 
 系数 $\alpha=0.15$ 是分析型敏感性参数，不是部署实测值，也不应被表述为文献给出的通用常数。本文末尾的参考文献支持在高并发 LLM 服务中引入非线性开销项，主要原因包括调度、批处理、排队和 KV/cache 压力。具体 $\alpha$ 取值应在系统实现后，使用 CPU profiling、NPU 服务吞吐和网络遥测数据进行校准。当前默认值表示中等非线性开销场景，用于敏感性分析。
 
@@ -153,17 +173,23 @@ $$
 C_{\mathrm{cpu,linear}} = \sum_i \frac{\lambda_i}{\lambda_{\mathrm{total}}} C_{\mathrm{base},i} + s_I C_{\mathrm{agent,intent}} + (1-s_I) C_{\mathrm{agent,nonintent}}
 $$
 
+其中：$C_{\mathrm{cpu,linear}}$ 表示加入非线性开销前的平均 CPU 成本；$\lambda_i/\lambda_{\mathrm{total}}$ 表示事件 $i$ 的流量占比；$C_{\mathrm{base},i}$ 表示事件 $i$ 的确定性核心网 CPU 成本；$s_I$ 表示总意图占比；$C_{\mathrm{agent,intent}}$ 表示意图 Agent CPU 成本；$C_{\mathrm{agent,nonintent}}$ 表示非意图 Agent CPU 成本。
+
 然后，将原始 CPU 利用率输入凸性函数 $F(\cdot)$，用于表示高负载下的调度、竞争和内存压力开销。
 
 $$
 u_{\mathrm{cpu}} = F(u_{\mathrm{cpu,linear}})
 $$
 
+其中：$u_{\mathrm{cpu}}$ 表示加入非线性开销后的有效 CPU 利用率；$u_{\mathrm{cpu,linear}}$ 表示加入开销前的原始 CPU 利用率；$F(\cdot)$ 表示凸性开销函数。
+
 有效 CPU 需求由 CPU 容量乘以有效 CPU 利用率得到。
 
 $$
 D_{\mathrm{cpu}} = C_{\mathrm{cpu,capacity}} \cdot u_{\mathrm{cpu}}
 $$
+
+其中：$D_{\mathrm{cpu}}$ 表示加入非线性开销后的有效 CPU 需求，单位为 CPU cores；$C_{\mathrm{cpu,capacity}}$ 表示总 CPU 容量，单位为 CPU cores；$u_{\mathrm{cpu}}$ 表示有效 CPU 利用率。
 
 ### 1.5.3 Qwen3/NPU 利用率
 
@@ -173,17 +199,23 @@ $$
 u_{Q,\mathrm{linear}} = \frac{T_Q}{C_Q}
 $$
 
+其中：$u_{Q,\mathrm{linear}}$ 表示加入非线性开销前的原始 Qwen3/NPU 利用率；$T_Q$ 表示原始 Qwen3 token 需求；$C_Q$ 表示配置的 Qwen3 token 能力。
+
 原始 NPU 利用率同样输入 $F(\cdot)$，用于表示批处理效率下降、运行时调度和 KV/cache 内存压力。
 
 $$
 u_Q = F(u_{Q,\mathrm{linear}})
 $$
 
+其中：$u_Q$ 表示加入非线性开销后的有效 Qwen3/NPU 利用率；$u_{Q,\mathrm{linear}}$ 表示原始 Qwen3/NPU 利用率；$F(\cdot)$ 表示凸性开销函数。
+
 有效 Qwen3 token 需求表示：在考虑非线性开销后，会产生相同有效 NPU 利用率的 token 需求。
 
 $$
 T_{Q,\mathrm{eff}} = C_Q \cdot u_Q
 $$
+
+其中：$T_{Q,\mathrm{eff}}$ 表示加入非线性开销后的有效 Qwen3 token 需求，单位为 tokens/s；$C_Q$ 表示配置的 Qwen3 token 能力；$u_Q$ 表示有效 Qwen3/NPU 利用率。
 
 ### 1.5.4 网络利用率
 
@@ -193,6 +225,8 @@ $$
 u_{\mathrm{net}} = F(u_{\mathrm{net,linear}})
 $$
 
+其中：$u_{\mathrm{net}}$ 表示加入非线性开销后的有效网络利用率；$u_{\mathrm{net,linear}}$ 表示加入开销前的原始网络利用率；$F(\cdot)$ 表示凸性开销函数。
+
 ### 1.5.5 时延和排队
 
 排队延迟使用 M/M/1 风格的近似公式表示。 $S$ 是服务时间， $u$ 是瓶颈资源的有效利用率。当 $u$ 接近 $1$ 时，排队延迟会快速增大，因此系统接近饱和时，时延会进入不稳定状态。
@@ -200,6 +234,8 @@ $$
 $$
 D_{\mathrm{queue}} = \frac{S \cdot u}{1-u}, \quad 0 \le u < 1
 $$
+
+其中：$D_{\mathrm{queue}}$ 表示排队时延；$S$ 表示服务时间；$u$ 表示瓶颈资源的有效利用率；$0 \le u < 1$ 表示该近似公式只在资源达到完全饱和之前使用。
 
 ## 1.6 分析结果
 

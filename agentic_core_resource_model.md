@@ -16,11 +16,15 @@ $$
 \lambda_i = \frac{N_{\mathrm{user}} \cdot f_i}{3600}
 $$
 
+Where: $\lambda_i$ is the request rate of event $i$ in requests/s; $N_{\mathrm{user}}$ is the user count; $f_i$ is the per-user event frequency in events/user/hour; $3600$ converts one hour to seconds.
+
 The total control-plane request rate is the sum of all modeled procedure rates.
 
 $$
 \lambda_{\mathrm{total}} = \sum_i \lambda_i
 $$
+
+Where: $\lambda_{\mathrm{total}}$ is the total request rate across all modeled procedures; $\sum_i$ means summing over every event type in the workload table; $\lambda_i$ is the request rate of each event type.
 
 The baseline uses $N_{\mathrm{user}}=3.6\times10^6$ users and $2$ PDU sessions/user. The baseline total is $104,300$ requests/s. Any request type may carry intent, so the intent ratio $\rho_I$ is applied to the full request stream.
 
@@ -72,17 +76,23 @@ $$
 \lambda_I = \rho_I \cdot \lambda_{\mathrm{total}}
 $$
 
+Where: $\lambda_I$ is the intent-bearing request rate; $\rho_I$ is the intent ratio across all requests; $\lambda_{\mathrm{total}}$ is the total control-plane request rate.
+
 Only a configured fraction of intent requests invoke Qwen3. That fraction is denoted by $r_Q$.
 
 $$
 \lambda_Q = \lambda_I \cdot r_Q
 $$
 
+Where: $\lambda_Q$ is the Qwen3 request rate; $\lambda_I$ is the intent-bearing request rate; $r_Q$ is the percentage of intent requests that invoke Qwen3.
+
 The raw Qwen3 token demand equals the Qwen3 request rate multiplied by the input-plus-output token profile.
 
 $$
 T_Q = \lambda_Q \cdot \left(L_{\mathrm{in}} + L_{\mathrm{out}}\right)
 $$
+
+Where: $T_Q$ is the raw Qwen3 token demand in tokens/s; $\lambda_Q$ is the Qwen3 request rate; $L_{\mathrm{in}}$ is input tokens/request; $L_{\mathrm{out}}$ is output tokens/request.
 
 The configured NPU cluster for Qwen3 serving has $N_Q=128$ NPUs. The number of available Qwen3 replicas and token capacity are:
 
@@ -92,11 +102,15 @@ $$
 R_{Q,\mathrm{avail}} = \left\lfloor \frac{N_Q}{TP_Q} \right\rfloor
 $$
 
+Where: $R_{Q,\mathrm{avail}}$ is the number of available Qwen3 serving replicas; $N_Q$ is the configured NPU count; $TP_Q$ is the tensor parallel size in NPUs/replica; $\lfloor\cdot\rfloor$ means rounding down to a whole replica count.
+
 The total Qwen3 token capacity is the number of available replicas multiplied by the per-replica token capacity $\mu_Q$.
 
 $$
 C_Q = R_{Q,\mathrm{avail}} \cdot \mu_Q
 $$
+
+Where: $C_Q$ is total Qwen3 serving capacity in tokens/s; $R_{Q,\mathrm{avail}}$ is the available replica count; $\mu_Q$ is the token capacity of one Qwen3 replica in tokens/s/replica.
 
 ## 1.4 Agentic Cost Model
 
@@ -108,11 +122,15 @@ $$
 D_{\mathrm{intent,light}} = 4\ \mathrm{ms} + 2\ \mathrm{ms}
 $$
 
+Where: $D_{\mathrm{intent,light}}$ is the latency contribution of lightweight intent handling; $4\ \mathrm{ms}$ is the fixed intent-agent delay; $2\ \mathrm{ms}$ is the CPU-side agent work on the request path.
+
 For intent requests that invoke Qwen3, the base Qwen3 serving time is modeled as $8\ \mathrm{ms/request}$ before queueing. Queueing delay is added later by the latency model when NPU utilization increases.
 
 $$
 D_{Q,\mathrm{service}} = 8\ \mathrm{ms/request}
 $$
+
+Where: $D_{Q,\mathrm{service}}$ is the base Qwen3 inference service time per request before queueing; $8\ \mathrm{ms/request}$ is the analytical service-time assumption used for complex intent requests.
 
 Intent-bearing requests add $12\ \mathrm{KB/request}$ of control-plane metadata for intent containers, task metadata, tool invocation wrappers, and inter-agent status/tracing metadata.
 
@@ -125,6 +143,8 @@ Let $u$ be the raw linear utilization, and let $F(u)$ be the effective utilizati
 $$
 F(u)=u+\alpha u^2,\quad \alpha=0.15
 $$
+
+Where: $F(u)$ is the effective utilization after nonlinear overhead; $u$ is the raw linear utilization before overhead; $\alpha$ is the nonlinear overhead coefficient; $\alpha=0.15$ is the default moderate-overhead assumption.
 
 The coefficient $\alpha=0.15$ is an analytical sensitivity parameter. It is not a deployment measurement and is not claimed as a universal value from literature. The references at the end of this document support the need for nonlinear overhead terms in high-concurrency LLM serving, especially from scheduling, batching, queueing, and KV/cache pressure. The exact value of $\alpha$ should be calibrated with measured CPU profiling, NPU serving throughput, and network telemetry after an implementation is available. The selected default represents a moderate overhead case for sensitivity analysis.
 
@@ -153,17 +173,23 @@ $$
 C_{\mathrm{cpu,linear}} = \sum_i \frac{\lambda_i}{\lambda_{\mathrm{total}}} C_{\mathrm{base},i} + s_I C_{\mathrm{agent,intent}} + (1-s_I) C_{\mathrm{agent,nonintent}}
 $$
 
+Where: $C_{\mathrm{cpu,linear}}$ is average CPU cost per request before nonlinear overhead; $\lambda_i/\lambda_{\mathrm{total}}$ is the traffic share of event $i$; $C_{\mathrm{base},i}$ is the deterministic core-network CPU cost of event $i$; $s_I$ is the total intent share; $C_{\mathrm{agent,intent}}$ is intent-agent CPU cost; $C_{\mathrm{agent,nonintent}}$ is non-intent agent CPU cost.
+
 The raw CPU utilization is then passed through the convex function $F(\cdot)$ to represent scheduling, contention, and memory-pressure overhead under high load.
 
 $$
 u_{\mathrm{cpu}} = F(u_{\mathrm{cpu,linear}})
 $$
 
+Where: $u_{\mathrm{cpu}}$ is effective CPU utilization after nonlinear overhead; $u_{\mathrm{cpu,linear}}$ is raw CPU utilization before overhead; $F(\cdot)$ is the convex overhead function.
+
 The effective CPU demand is obtained by multiplying CPU capacity by the effective CPU utilization.
 
 $$
 D_{\mathrm{cpu}} = C_{\mathrm{cpu,capacity}} \cdot u_{\mathrm{cpu}}
 $$
+
+Where: $D_{\mathrm{cpu}}$ is effective CPU demand in CPU cores after nonlinear overhead; $C_{\mathrm{cpu,capacity}}$ is total CPU capacity in CPU cores; $u_{\mathrm{cpu}}$ is effective CPU utilization.
 
 ### 1.5.3 Qwen3/NPU Utilization
 
@@ -173,17 +199,23 @@ $$
 u_{Q,\mathrm{linear}} = \frac{T_Q}{C_Q}
 $$
 
+Where: $u_{Q,\mathrm{linear}}$ is raw Qwen3/NPU utilization before nonlinear overhead; $T_Q$ is raw Qwen3 token demand; $C_Q$ is configured Qwen3 token capacity.
+
 The raw NPU utilization is also passed through $F(\cdot)$ to represent batching inefficiency, runtime scheduling, and KV/cache memory pressure.
 
 $$
 u_Q = F(u_{Q,\mathrm{linear}})
 $$
 
+Where: $u_Q$ is effective Qwen3/NPU utilization after nonlinear overhead; $u_{Q,\mathrm{linear}}$ is raw Qwen3/NPU utilization; $F(\cdot)$ is the convex overhead function.
+
 The effective Qwen3 token demand is the token demand that would produce the same effective NPU utilization after nonlinear overhead.
 
 $$
 T_{Q,\mathrm{eff}} = C_Q \cdot u_Q
 $$
+
+Where: $T_{Q,\mathrm{eff}}$ is effective Qwen3 token demand in tokens/s after nonlinear overhead; $C_Q$ is configured Qwen3 token capacity; $u_Q$ is effective Qwen3/NPU utilization.
 
 ### 1.5.4 Network Utilization
 
@@ -193,6 +225,8 @@ $$
 u_{\mathrm{net}} = F(u_{\mathrm{net,linear}})
 $$
 
+Where: $u_{\mathrm{net}}$ is effective network utilization after nonlinear overhead; $u_{\mathrm{net,linear}}$ is raw network utilization before overhead; $F(\cdot)$ is the convex overhead function.
+
 ### 1.5.5 Latency and Queueing
 
 Queueing delay is represented by an M/M/1-style approximation. $S$ is the service time and $u$ is the effective utilization of the bottleneck resource. The delay grows quickly as $u$ approaches $1$, which is why latency becomes unstable near saturation.
@@ -200,6 +234,8 @@ Queueing delay is represented by an M/M/1-style approximation. $S$ is the servic
 $$
 D_{\mathrm{queue}} = \frac{S \cdot u}{1-u}, \quad 0 \le u < 1
 $$
+
+Where: $D_{\mathrm{queue}}$ is queueing delay; $S$ is service time; $u$ is effective utilization of the bottleneck resource; $0 \le u < 1$ means the approximation is used only before the resource reaches full saturation.
 
 ## 1.6 Analytical Results
 
