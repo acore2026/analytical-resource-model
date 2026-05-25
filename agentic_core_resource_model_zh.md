@@ -125,35 +125,51 @@ KV/cache 内存压力对 Qwen3 服务尤其重要。在高并发场景下，活�
 
 该非线性假设有 LLM 服务领域的文献支持。Sarathi-Serve 讨论了 prefill 和 decode 阶段之间的吞吐-时延权衡，并通过调度降低 stall（[arXiv:2403.02310](https://arxiv.org/abs/2403.02310)，[OSDI 2024 PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)）。vLLM/PagedAttention 指出 KV-cache 规模大、动态变化，并且在管理不当时会限制批处理效率（[arXiv:2309.06180](https://arxiv.org/abs/2309.06180)）。Microsoft Research 将带 KV-cache 内存约束的在线 LLM 推理调度建模为时延和利用率问题（[Microsoft Research](https://www.microsoft.com/en-us/research/publication/online-scheduling-for-llm-inference-with-kv-cache-constraints/)，[arXiv:2502.07115](https://arxiv.org/abs/2502.07115)）。这些资料支撑将高并发推理建模为凸性容量问题；具体系数仍应通过部署数据校准。
 
+以下公式说明模型如何将凸性开销函数应用到 CPU、网络和 Qwen3/NPU 资源。
+
+首先，平均线性 CPU 成本由按流量加权的确定性核心网基础成本和 Agentic CPU 成本组成。意图占比 $s_I$ 决定有多少流量使用意图 Agent CPU 工作量，以及有多少流量使用非意图 Agent CPU 工作量。
+
 $$
 C_{\mathrm{cpu,linear}} = \sum_i \frac{\lambda_i}{\lambda_{\mathrm{total}}} C_{\mathrm{base},i} + s_I C_{\mathrm{agent,intent}} + (1-s_I) C_{\mathrm{agent,nonintent}}
 $$
+
+然后，将原始 CPU 利用率输入凸性函数 $F(\cdot)$，用于表示高负载下的调度、竞争和内存压力开销。
 
 $$
 u_{\mathrm{cpu}} = F(u_{\mathrm{cpu,linear}})
 $$
 
+有效 CPU 需求由 CPU 容量乘以有效 CPU 利用率得到。
+
 $$
 D_{\mathrm{cpu}} = C_{\mathrm{cpu,capacity}} \cdot u_{\mathrm{cpu}}
 $$
+
+网络利用率也使用相同的非线性修正，使排队、缓冲和协调开销反映到有效带宽负载中。
 
 $$
 u_{\mathrm{net}} = F(u_{\mathrm{net,linear}})
 $$
 
+对于 Qwen3 服务，原始 NPU 利用率由 token 需求除以配置的 Qwen3 token 能力得到。
+
 $$
 u_{Q,\mathrm{linear}} = \frac{T_Q}{C_Q}
 $$
+
+原始 NPU 利用率同样输入 $F(\cdot)$，用于表示批处理效率下降、运行时调度和 KV/cache 内存压力。
 
 $$
 u_Q = F(u_{Q,\mathrm{linear}})
 $$
 
+有效 Qwen3 token 需求表示：在考虑非线性开销后，会产生相同有效 NPU 利用率的 token 需求。
+
 $$
 T_{Q,\mathrm{eff}} = C_Q \cdot u_Q
 $$
 
-排队延迟表示为：
+最后，排队延迟使用 M/M/1 风格的近似公式表示。 $S$ 是服务时间， $u$ 是瓶颈资源的有效利用率。当 $u$ 接近 $1$ 时，排队延迟会快速增大，因此系统接近饱和时，时延会进入不稳定状态。
 
 $$
 D_{\mathrm{queue}} = \frac{S \cdot u}{1-u}, \quad 0 \le u < 1
