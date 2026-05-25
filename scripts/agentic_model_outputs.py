@@ -11,6 +11,10 @@ from typing import Dict, Iterable, List
 from agentic_model_config import SENSITIVITY_USERS, USER_COUNT_PLOT_INTENT_RATIO, ModelConfig
 from agentic_model_core import evaluate, fmt
 
+CPU_COLOR = "#2a7f3e"
+NETWORK_COLOR = "#1f77b4"
+NPU_COLOR = "#d66a00"
+
 def write_csv(rows: Iterable[Dict[str, float | str]], path: Path) -> None:
     rows = list(rows)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -39,13 +43,25 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
 
     fig, ax_util = plt.subplots(figsize=(7, 4.2))
     ax_npu = ax_util.twinx()
-    cpu_line, = ax_util.plot(x, [float(r["cpu_utilization"]) * 100.0 for r in rows], marker="o", label="CPU util")
-    net_line, = ax_util.plot(x, [float(r["network_utilization"]) * 100.0 for r in rows], marker="o", label="Network util")
+    cpu_line, = ax_util.plot(
+        x,
+        [float(r["cpu_utilization"]) * 100.0 for r in rows],
+        marker="o",
+        color=CPU_COLOR,
+        label="CPU util",
+    )
+    net_line, = ax_util.plot(
+        x,
+        [float(r["network_utilization"]) * 100.0 for r in rows],
+        marker="s",
+        color=NETWORK_COLOR,
+        label="Network util",
+    )
     npu_line, = ax_npu.plot(
         x,
         [float(r["required_production_npus"]) for r in rows],
-        marker="o",
-        color="tab:orange",
+        marker="^",
+        color=NPU_COLOR,
         label="Required Qwen3 NPUs",
     )
     ax_util.axhline(70, color="tab:gray", linestyle="--", linewidth=1, label="70% utilization")
@@ -63,9 +79,9 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
     plt.close()
 
     plt.figure(figsize=(7, 4.2))
-    plt.plot(x, finite_series("mean_latency_ms"), marker="o", label="mean")
-    plt.plot(x, finite_series("p95_latency_ms"), marker="o", label="p95")
-    plt.plot(x, finite_series("p99_latency_ms"), marker="o", label="p99")
+    plt.plot(x, finite_series("mean_latency_ms"), marker="o", color="#2a7f3e", label="mean")
+    plt.plot(x, finite_series("p95_latency_ms"), marker="s", color="#1f77b4", label="p95")
+    plt.plot(x, finite_series("p99_latency_ms"), marker="^", color="#d66a00", label="p99")
     plt.xlabel("Intent ratio across all requests (%)")
     plt.ylabel("Latency (ms)")
     plt.title("Nonlinear control-plane latency vs. intent ratio")
@@ -90,13 +106,25 @@ def maybe_write_user_count_plot(config: ModelConfig, out_dir: Path) -> None:
 
     fig, ax_util = plt.subplots(figsize=(7, 4.2))
     ax_npu = ax_util.twinx()
-    cpu_line, = ax_util.plot(x, [float(r["cpu_utilization"]) * 100.0 for r in rows], marker="o", label="CPU util")
-    net_line, = ax_util.plot(x, [float(r["network_utilization"]) * 100.0 for r in rows], marker="o", label="Network util")
+    cpu_line, = ax_util.plot(
+        x,
+        [float(r["cpu_utilization"]) * 100.0 for r in rows],
+        marker="o",
+        color=CPU_COLOR,
+        label="CPU util",
+    )
+    net_line, = ax_util.plot(
+        x,
+        [float(r["network_utilization"]) * 100.0 for r in rows],
+        marker="s",
+        color=NETWORK_COLOR,
+        label="Network util",
+    )
     npu_line, = ax_npu.plot(
         x,
         [float(r["required_production_npus"]) for r in rows],
-        marker="o",
-        color="tab:orange",
+        marker="^",
+        color=NPU_COLOR,
         label="Required Qwen3 NPUs",
     )
     ax_util.axhline(70, color="tab:gray", linestyle="--", linewidth=1, label="70% utilization")
