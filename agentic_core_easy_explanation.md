@@ -6,7 +6,7 @@ This document explains the main calculation logic in a simple way.
 
 ## One Sentence
 
-We calculate request volume from users, add Agent cost for intent requests, convert complex intent requests into Qwen3 tokens, apply high-load nonlinear overhead, and calculate required production NPUs.
+We calculate request volume from users, add Agent cost for intent requests, convert complex intent requests into Qwen3 tokens, apply high-load nonlinear overhead, and calculate utilization of a configured Qwen3 NPU cluster.
 
 ## Step 1: Start From Users
 
@@ -63,28 +63,34 @@ The model uses easy operating bands instead of a complex curve:
 | $80\% \le u < 90\%$ | High load | $1.35$ |
 | $90\% \le u$ | Critical | $1.60$ |
 
-For the default full-intent Qwen3 case:
+For the default full-intent Qwen3 case with a fixed 128-NPU cluster:
 
 $$
-T_{Q,\mathrm{eff}} = 1,583,274\ \mathrm{tokens/s}
+T_{Q,\mathrm{eff}} = 2,202,816\ \mathrm{tokens/s}
 $$
 
-## Step 6: Calculate Production NPUs
+## Step 6: Calculate Qwen3/NPU Utilization
 
-The reference capacity is:
-
-$$
-\mu_Q = 15,040\ \mathrm{tokens/s/replica}, \quad TP_Q = 4\ \mathrm{NPUs/replica}, \quad u_{\mathrm{target}} = 70\%
-$$
-
-Required replicas and NPUs are:
+The configured Qwen3 cluster is:
 
 $$
-R_Q = \left\lceil \frac{1,583,274}{15,040 \cdot 70\%} \right\rceil = 151
+N_Q = 128\ \mathrm{NPUs}, \quad TP_Q = 4\ \mathrm{NPUs/replica}
+$$
+
+Available replicas and token capacity are:
+
+$$
+R_{Q,\mathrm{avail}} = \left\lfloor \frac{128}{4} \right\rfloor = 32
 $$
 
 $$
-N_Q = 151 \cdot 4 = 604\ \mathrm{NPUs}
+C_Q = 32 \cdot 15,040 = 481,280\ \mathrm{tokens/s}
+$$
+
+Qwen3/NPU utilization is:
+
+$$
+u_Q = \frac{2,202,816}{481,280} = 457.7\%
 $$
 
 ## Main Message
@@ -94,7 +100,8 @@ For the baseline production scenario:
 - User population is $3.6$ million.
 - At $100\%$ intent ratio, intent traffic is $104,300$ requests/s.
 - $10\%$ of intent requests invoke Qwen3.
-- Effective Qwen3 demand after nonlinear overhead is $1,583,274$ tokens/s.
-- Required production capacity is $604$ NPUs.
+- The configured Qwen3 cluster has $128$ NPUs.
+- At $20\%$ intent ratio, Qwen3/NPU utilization is $57.2\%$.
+- At $30\%$ intent ratio, Qwen3/NPU utilization is $115.9\%$, so the configured NPU cluster is overloaded.
 
 This is the core logic of the analysis.

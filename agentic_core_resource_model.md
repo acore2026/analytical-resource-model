@@ -42,7 +42,7 @@ The baseline uses $N_{\mathrm{user}}=3.6\times10^6$ users and $2$ PDU sessions/u
 | RAM capacity | 256 GB |
 | Inference runtime | vLLM Ascend 0.11.0 |
 | Intent inference model | Qwen3-30B-A3B |
-| Production NPU sizing target | 70% Qwen3 token utilization |
+| Configured Qwen3 NPU cluster | 128 NPUs |
 | Qwen3 invocation ratio | 10% of intent requests |
 | Qwen3 token profile | 128 input tokens + 4 output tokens = 132 tokens/request |
 | Qwen3 token capacity | 15,040 tokens/s/replica |
@@ -72,6 +72,16 @@ $$
 
 $$
 T_Q = \lambda_Q \cdot \left(L_{\mathrm{in}} + L_{\mathrm{out}}\right)
+$$
+
+The configured Qwen3 cluster has $N_Q=128$ NPUs. The number of available Qwen3 replicas and token capacity are:
+
+$$
+R_{Q,\mathrm{avail}} = \left\lfloor \frac{N_Q}{TP_Q} \right\rfloor
+$$
+
+$$
+C_Q = R_{Q,\mathrm{avail}} \cdot \mu_Q
 $$
 
 ## Agentic Cost Model
@@ -108,7 +118,7 @@ The nonlinear multiplier represents the reduction of effective serving efficienc
 | Resource area | Nonlinear factor | Effect represented in the model |
 | --- | --- | --- |
 | CPU | Scheduler overhead, lock contention, cache misses, memory access delay, serialization/deserialization, and state-store pressure. | Effective CPU-ms/request increases in higher CPU load bands. |
-| Qwen3/NPU serving | Batching inefficiency, request routing, replica scheduling, runtime coordination, cross-replica overhead, and KV/cache memory pressure. | Raw token demand is converted into effective token demand before calculating replicas and NPUs. |
+| Qwen3/NPU serving | Batching inefficiency, request routing, replica scheduling, runtime coordination, cross-replica overhead, and KV/cache memory pressure. | Raw token demand is converted into effective token demand before calculating utilization of the configured NPU cluster. |
 | Network | Queueing, buffering, congestion-control behavior, retransmission risk, and additional control-plane coordination. | Effective bandwidth and network delay increase in higher network load bands. |
 | Latency | CPU queueing, NPU queueing, network queueing, and tail-latency amplification. | Mean, p95, and p99 latency rise faster as utilization approaches saturation. |
 
@@ -127,15 +137,15 @@ B_{\mathrm{net}} = \frac{\lambda_{\mathrm{total}} B_{\mathrm{req,linear}} \cdot 
 $$
 
 $$
+u_{Q,\mathrm{linear}} = \frac{T_Q}{C_Q}
+$$
+
+$$
 T_{Q,\mathrm{eff}} = T_Q \cdot M(u_{Q,\mathrm{linear}})
 $$
 
 $$
-R_Q = \left\lceil \frac{T_{Q,\mathrm{eff}}}{\mu_Q \cdot u_{\mathrm{target}}} \right\rceil
-$$
-
-$$
-N_Q = R_Q \cdot TP_Q
+u_Q = \frac{T_{Q,\mathrm{eff}}}{C_Q}
 $$
 
 Queueing delay is represented by:
@@ -146,33 +156,23 @@ $$
 
 ## Analytical Results
 
-The table fixes the user population and event frequencies, then varies the percentage of all requests that carry intent in constant $10\%$ steps. The visible results use the piecewise nonlinear load-band model.
+The table fixes the user population, event frequencies, and Qwen3 cluster size, then varies the percentage of all requests that carry intent in constant $10\%$ steps. The visible results use the piecewise nonlinear load-band model.
 
-| Intent ratio | Total intent share | Intent rps | Qwen3 rps | Effective Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | Sized Qwen3 util | Required production NPUs | Network bandwidth | Mean latency | p95 latency | Status |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 0% | 0.0% | 0 | 0 | 0 | 180.3 | 70.4% | 53.402 Gbps | 0.0% | 0 | 6.779 Gbps | 24.6 ms | 141.9 ms | degraded |
-| 10% | 10.0% | 10,430 | 1,043 | 158,327 | 200.7 | 78.4% | 90.783 Gbps | 65.8% | 64 | 7.780 Gbps | 28.1 ms | 231.8 ms | degraded |
-| 20% | 20.0% | 20,860 | 2,086 | 316,655 | 221.1 | 86.4% | 128.164 Gbps | 67.9% | 124 | 8.782 Gbps | 35.1 ms | 350.8 ms | high_risk |
-| 30% | 30.0% | 31,290 | 3,129 | 474,982 | 283.5 | 110.7% | 165.545 Gbps | 68.7% | 184 | 9.783 Gbps | unstable | unstable | unstable |
-| 40% | 40.0% | 41,720 | 4,172 | 633,310 | 307.5 | 120.1% | 202.926 Gbps | 69.0% | 244 | 10.784 Gbps | unstable | unstable | unstable |
-| 50% | 50.0% | 52,150 | 5,215 | 791,637 | 392.8 | 153.4% | 240.307 Gbps | 69.3% | 304 | 11.786 Gbps | unstable | unstable | unstable |
-| 60% | 60.0% | 62,580 | 6,258 | 949,964 | 421.1 | 164.5% | 277.688 Gbps | 69.4% | 364 | 12.787 Gbps | unstable | unstable | unstable |
-| 70% | 70.0% | 73,010 | 7,301 | 1,108,292 | 449.5 | 175.6% | 315.069 Gbps | 69.5% | 424 | 13.788 Gbps | unstable | unstable | unstable |
-| 80% | 80.0% | 83,440 | 8,344 | 1,266,619 | 477.9 | 186.7% | 352.451 Gbps | 69.6% | 484 | 14.789 Gbps | unstable | unstable | unstable |
-| 90% | 90.0% | 93,870 | 9,387 | 1,424,947 | 506.2 | 197.7% | 389.832 Gbps | 69.7% | 544 | 15.791 Gbps | unstable | unstable | unstable |
-| 100% | 100.0% | 104,300 | 10,430 | 1,583,274 | 534.6 | 208.8% | 427.213 Gbps | 69.7% | 604 | 16.792 Gbps | unstable | unstable | unstable |
+| Intent ratio | Total intent share | Intent rps | Qwen3 rps | Effective Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | Qwen3/NPU util | Network bandwidth | Mean latency | p95 latency | Status |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 0% | 0.0% | 0 | 0 | 0 | 180.3 | 70.4% | 53.402 Gbps | 0.0% | 6.779 Gbps | 24.6 ms | 141.9 ms | degraded |
+| 10% | 10.0% | 10,430 | 1,043 | 137,676 | 200.7 | 78.4% | 90.783 Gbps | 28.6% | 7.780 Gbps | 28.1 ms | 231.8 ms | degraded |
+| 20% | 20.0% | 20,860 | 2,086 | 275,352 | 221.1 | 86.4% | 128.164 Gbps | 57.2% | 8.782 Gbps | 35.1 ms | 350.8 ms | high_risk |
+| 30% | 30.0% | 31,290 | 3,129 | 557,588 | 283.5 | 110.7% | 165.545 Gbps | 115.9% | 9.783 Gbps | unstable | unstable | unstable |
+| 40% | 40.0% | 41,720 | 4,172 | 881,126 | 307.5 | 120.1% | 202.926 Gbps | 183.1% | 10.784 Gbps | unstable | unstable | unstable |
+| 50% | 50.0% | 52,150 | 5,215 | 1,101,408 | 392.8 | 153.4% | 240.307 Gbps | 228.8% | 11.786 Gbps | unstable | unstable | unstable |
+| 60% | 60.0% | 62,580 | 6,258 | 1,321,690 | 421.1 | 164.5% | 277.688 Gbps | 274.6% | 12.787 Gbps | unstable | unstable | unstable |
+| 70% | 70.0% | 73,010 | 7,301 | 1,541,971 | 449.5 | 175.6% | 315.069 Gbps | 320.4% | 13.788 Gbps | unstable | unstable | unstable |
+| 80% | 80.0% | 83,440 | 8,344 | 1,762,253 | 477.9 | 186.7% | 352.451 Gbps | 366.2% | 14.789 Gbps | unstable | unstable | unstable |
+| 90% | 90.0% | 93,870 | 9,387 | 1,982,534 | 506.2 | 197.7% | 389.832 Gbps | 411.9% | 15.791 Gbps | unstable | unstable | unstable |
+| 100% | 100.0% | 104,300 | 10,430 | 2,202,816 | 534.6 | 208.8% | 427.213 Gbps | 457.7% | 16.792 Gbps | unstable | unstable | unstable |
 
-Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`. The Qwen3 sizing sensitivity sweep is available in `outputs/agentic_qwen3_sizing_sensitivity.csv`.
-
-Qwen3 production sizing at $100\%$ intent ratio with the optimized $15,040\ \mathrm{tokens/s/replica}$ reference:
-
-| Qwen3 invocation ratio | Qwen3 rps | Effective token demand | Required replicas | Required NPUs | Sized Qwen3 util |
-| ---: | ---: | ---: | ---: | ---: | ---: |
-| 5% | 5,215 | 791,637 tokens/s | 76 | 304 | 69.3% |
-| 10% | 10,430 | 1,583,274 tokens/s | 151 | 604 | 69.7% |
-| 20% | 20,860 | 3,166,548 tokens/s | 301 | 1,204 | 69.9% |
-| 50% | 52,150 | 7,916,370 tokens/s | 752 | 3,008 | 70.0% |
-| 100% | 104,300 | 15,832,740 tokens/s | 1,504 | 6,016 | 70.0% |
+Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`. The Qwen3 sensitivity sweep is available in `outputs/agentic_qwen3_sizing_sensitivity.csv`.
 
 ![](outputs/agentic_resource_utilization.png)
 ![](outputs/agentic_latency.png)
@@ -183,7 +183,7 @@ The following user-count sensitivity figure fixes the intent ratio at $20\%$ and
 
 ## Interpretation
 
-With the piecewise nonlinear load-band model and $10\%$ Qwen3 invocation ratio, $100\%$ intent traffic requires the Qwen3 NPU count shown above. The full-load scenario is CPU-unstable unless more CPU capacity, lower intent ratio, faster CPU-side processing, or admission control is added.
+With $128$ configured Qwen3 NPUs and $10\%$ Qwen3 invocation ratio, Qwen3/NPU utilization is $28.6\%$ at $10\%$ intent ratio and $57.2\%$ at $20\%$ intent ratio. At $30\%$ intent ratio, Qwen3/NPU utilization exceeds $100\%$, so the fixed NPU cluster is overloaded. Higher intent ratios require more NPU capacity, lower Qwen3 invocation ratio, shorter token profiles, faster serving, or admission control.
 
 ## Model Boundary
 

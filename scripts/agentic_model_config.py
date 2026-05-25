@@ -22,6 +22,7 @@ class ModelConfig:
     cpu_cores: float = 256.0
     nic_gbps: float = 100.0
     ram_gb: float = 256.0
+    qwen3_npu_count: float = 128.0
     npu_hbm_per_npu_gb: float = 32.0
     cpu_degraded_util: float = 0.70
     cpu_high_risk_util: float = 0.85
@@ -41,7 +42,6 @@ class ModelConfig:
     qwen3_output_tokens_per_request: float = 4.0
     qwen3_token_capacity_per_replica: float = 15_040.0
     qwen3_tensor_parallel_size: float = 4.0
-    qwen3_target_util: float = 0.70
     qwen3_latency_ms: float = 8.0
     qwen3_active_hbm_mb: float = 4.0
     active_context_ram_kb: float = 128.0

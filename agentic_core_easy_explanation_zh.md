@@ -6,7 +6,7 @@
 
 ## 一句话
 
-我们先从用户数计算请求量，再为意图请求增加 Agent 成本；对于复杂意图请求，将其换算成 Qwen3 token，叠加高负载非线性开销，最后计算所需生产 NPU 数量。
+我们先从用户数计算请求量，再为意图请求增加 Agent 成本；对于复杂意图请求，将其换算成 Qwen3 token，叠加高负载非线性开销，最后计算配置好的 Qwen3 NPU 集群利用率。
 
 ## 第一步：从用户数开始
 
@@ -63,28 +63,34 @@ $$
 | $80\% \le u < 90\%$ | 高负载 | $1.35$ |
 | $90\% \le u$ | 临界 | $1.60$ |
 
-对于默认满意图 Qwen3 场景：
+对于默认满意图 Qwen3 场景，且 Qwen3 集群固定为 128 张 NPU：
 
 $$
-T_{Q,\mathrm{eff}} = 1,583,274\ \mathrm{tokens/s}
+T_{Q,\mathrm{eff}} = 2,202,816\ \mathrm{tokens/s}
 $$
 
-## 第六步：计算生产 NPU 数量
+## 第六步：计算 Qwen3/NPU 利用率
 
-参考能力为：
-
-$$
-\mu_Q = 15,040\ \mathrm{tokens/s/replica}, \quad TP_Q = 4\ \mathrm{NPUs/replica}, \quad u_{\mathrm{target}} = 70\%
-$$
-
-所需副本和 NPU 数量为：
+配置的 Qwen3 集群为：
 
 $$
-R_Q = \left\lceil \frac{1,583,274}{15,040 \cdot 70\%} \right\rceil = 151
+N_Q = 128\ \mathrm{NPUs}, \quad TP_Q = 4\ \mathrm{NPUs/replica}
+$$
+
+可用副本数和 token 容量为：
+
+$$
+R_{Q,\mathrm{avail}} = \left\lfloor \frac{128}{4} \right\rfloor = 32
 $$
 
 $$
-N_Q = 151 \cdot 4 = 604\ \mathrm{NPUs}
+C_Q = 32 \cdot 15,040 = 481,280\ \mathrm{tokens/s}
+$$
+
+Qwen3/NPU 利用率为：
+
+$$
+u_Q = \frac{2,202,816}{481,280} = 457.7\%
 $$
 
 ## 核心结论
@@ -94,7 +100,8 @@ $$
 - 用户数为 $3.6$ million。
 - 当意图比例为 $100\%$ 时，意图请求速率为 $104,300$ requests/s。
 - $10\%$ 的意图请求调用 Qwen3。
-- 非线性开销后的有效 Qwen3 需求为 $1,583,274$ tokens/s。
-- 需要 $604$ 张生产 NPU。
+- 配置的 Qwen3 集群为 $128$ 张 NPU。
+- 当意图比例为 $20\%$ 时，Qwen3/NPU 利用率为 $57.2\%$。
+- 当意图比例为 $30\%$ 时，Qwen3/NPU 利用率为 $115.9\%$，说明配置的 NPU 集群已经过载。
 
 这就是本分析的核心逻辑。

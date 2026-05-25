@@ -19,13 +19,13 @@ export interface Baseline {
   cpuCores: number;
   nicGbps: number;
   ramGb: number;
+  qwen3NpuCount: number;
   npuHbmPerNpuGb: number;
   qwen3InvocationRatio: number;
   qwen3InputTokens: number;
   qwen3OutputTokens: number;
   qwen3TokenCapacity: number;
   qwen3TensorParallel: number;
-  qwen3TargetUtil: number;
   nonIntentCpu: number;
   intentCpu: number;
   qwen3LatencyMs: number;
@@ -62,9 +62,9 @@ export interface Result {
   npuUtil: number;
   qwen3RequestRps: number;
   qwen3TokenDemand: number;
+  qwen3RawUtil: number;
   qwen3EffectiveTokenDemand: number;
-  requiredQwen3Replicas: number;
-  requiredProductionNpus: number;
+  qwen3AvailableReplicas: number;
   npuHbmGb: number;
   npuHbmUtil: number;
   networkGbps: number;

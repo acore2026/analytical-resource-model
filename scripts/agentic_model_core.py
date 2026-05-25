@@ -74,32 +74,19 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     )
     qwen3_request_rps = intent_rps * config.qwen3_invocation_ratio
     qwen3_token_demand_tps = qwen3_request_rps * qwen3_tokens_per_request
-    linear_required_qwen3_replicas = (
-        math.ceil(qwen3_token_demand_tps / (
-            config.qwen3_token_capacity_per_replica * config.qwen3_target_util
-        ))
-        if qwen3_token_demand_tps > 0
-        else 0
+    qwen3_tensor_parallel_size = max(1, math.ceil(config.qwen3_tensor_parallel_size))
+    qwen3_cluster_npus = max(0, math.floor(config.qwen3_npu_count))
+    qwen3_available_replicas = qwen3_cluster_npus // qwen3_tensor_parallel_size
+    qwen3_cluster_token_capacity_tps = (
+        qwen3_available_replicas * config.qwen3_token_capacity_per_replica
     )
-    linear_qwen3_production_token_capacity_tps = (
-        linear_required_qwen3_replicas * config.qwen3_token_capacity_per_replica
-    )
-    linear_npu_util = (
-        qwen3_token_demand_tps / linear_qwen3_production_token_capacity_tps
-        if linear_qwen3_production_token_capacity_tps
+    qwen3_raw_util = (
+        qwen3_token_demand_tps / qwen3_cluster_token_capacity_tps
+        if qwen3_cluster_token_capacity_tps
         else 0.0
     )
-    qwen3_nonlinear_multiplier = piecewise_multiplier(linear_npu_util)
+    qwen3_nonlinear_multiplier = piecewise_multiplier(qwen3_raw_util)
     qwen3_effective_token_demand_tps = qwen3_token_demand_tps * qwen3_nonlinear_multiplier
-    required_qwen3_replicas = (
-        math.ceil(qwen3_effective_token_demand_tps / (
-            config.qwen3_token_capacity_per_replica * config.qwen3_target_util
-        ))
-        if qwen3_effective_token_demand_tps > 0
-        else 0
-    )
-    required_production_npus = required_qwen3_replicas * math.ceil(config.qwen3_tensor_parallel_size)
-    qwen3_production_token_capacity_tps = required_qwen3_replicas * config.qwen3_token_capacity_per_replica
 
     base_cpu_ms_avg = weighted_average(config, "base_cpu_ms")
     agent_cpu_ms_avg = (
@@ -128,13 +115,13 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     network_delay = queue_delay_ms(network_util, 0.1)
 
     npu_util = (
-        qwen3_effective_token_demand_tps / qwen3_production_token_capacity_tps
-        if qwen3_production_token_capacity_tps
+        qwen3_effective_token_demand_tps / qwen3_cluster_token_capacity_tps
+        if qwen3_cluster_token_capacity_tps
         else 0.0
     )
     npu_queue_delay = (
-        queue_delay_ms(npu_util, 1_000.0 / qwen3_production_token_capacity_tps)
-        if qwen3_production_token_capacity_tps
+        queue_delay_ms(npu_util, 1_000.0 / qwen3_cluster_token_capacity_tps)
+        if qwen3_cluster_token_capacity_tps
         else 0.0
     )
     qwen3_inference_latency = config.qwen3_latency_ms + npu_queue_delay
@@ -142,12 +129,12 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     active_qwen3_requests = qwen3_request_rps * config.qwen3_latency_ms / 1000.0
     npu_hbm_gb = 0.0
     if qwen3_request_rps > 0:
-        active_npu_count = required_qwen3_replicas * config.qwen3_tensor_parallel_size
+        active_npu_count = qwen3_available_replicas * qwen3_tensor_parallel_size
         npu_hbm_gb = (
             active_npu_count * config.fixed_model_hbm_gb
             + active_qwen3_requests * config.qwen3_active_hbm_mb / 1024.0
         )
-    production_npu_total_hbm_gb = required_production_npus * config.npu_hbm_per_npu_gb
+    production_npu_total_hbm_gb = qwen3_cluster_npus * config.npu_hbm_per_npu_gb
 
     active_requests = rps_total * (weighted_average(config, "base_latency_ms") / 1000.0)
     ram_gb = (
@@ -200,21 +187,21 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     result: Dict[str, float | str] = {
         "user_count": config.user_count,
         "pdu_sessions_per_user": config.pdu_sessions_per_user,
+        "qwen3_npu_count": qwen3_cluster_npus,
         "npu_hbm_per_npu_gb": config.npu_hbm_per_npu_gb,
         "qwen3_invocation_ratio": config.qwen3_invocation_ratio,
         "qwen3_input_tokens_per_request": config.qwen3_input_tokens_per_request,
         "qwen3_output_tokens_per_request": config.qwen3_output_tokens_per_request,
         "qwen3_tokens_per_request": qwen3_tokens_per_request,
         "qwen3_token_capacity_per_replica": config.qwen3_token_capacity_per_replica,
-        "qwen3_tensor_parallel_size": config.qwen3_tensor_parallel_size,
-        "qwen3_target_utilization": config.qwen3_target_util,
+        "qwen3_tensor_parallel_size": qwen3_tensor_parallel_size,
+        "qwen3_available_replicas": qwen3_available_replicas,
         "qwen3_request_rps": qwen3_request_rps,
         "qwen3_token_demand_tps": qwen3_token_demand_tps,
+        "qwen3_raw_utilization": qwen3_raw_util,
         "qwen3_effective_token_demand_tps": qwen3_effective_token_demand_tps,
         "qwen3_nonlinear_multiplier": qwen3_nonlinear_multiplier,
-        "qwen3_production_token_capacity_tps": qwen3_production_token_capacity_tps,
-        "required_qwen3_replicas": required_qwen3_replicas,
-        "required_production_npus": required_production_npus,
+        "qwen3_cluster_token_capacity_tps": qwen3_cluster_token_capacity_tps,
         "production_npu_total_hbm_gb": production_npu_total_hbm_gb,
         "total_rps": rps_total,
         "intent_ratio": intent_ratio,
@@ -235,7 +222,6 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
         "npu_status": status(npu_util, config.npu_degraded_util, config.npu_high_risk_util),
         "npu_hbm_gb": npu_hbm_gb,
         "npu_hbm_utilization": npu_hbm_gb / production_npu_total_hbm_gb if production_npu_total_hbm_gb else 0.0,
-        "required_npus_for_70pct_util": required_production_npus,
         "linear_network_utilization": linear_network_util,
         "network_nonlinear_multiplier": network_nonlinear_multiplier,
         "network_bandwidth_gbps": bandwidth_gbps,

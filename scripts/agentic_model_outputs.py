@@ -42,7 +42,6 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
         return values
 
     fig, ax_util = plt.subplots(figsize=(7, 4.2))
-    ax_npu = ax_util.twinx()
     cpu_line, = ax_util.plot(
         x,
         [float(r["cpu_utilization"]) * 100.0 for r in rows],
@@ -57,19 +56,18 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
         color=NETWORK_COLOR,
         label="Network util",
     )
-    npu_line, = ax_npu.plot(
+    npu_line, = ax_util.plot(
         x,
-        [float(r["required_production_npus"]) for r in rows],
+        [float(r["npu_utilization"]) * 100.0 for r in rows],
         marker="^",
         color=NPU_COLOR,
-        label="Required Qwen3 NPUs",
+        label="Qwen3/NPU util",
     )
     ax_util.axhline(70, color="tab:gray", linestyle="--", linewidth=1, label="70% utilization")
     ax_util.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
     ax_util.set_xlabel("Intent ratio across all requests (%)")
-    ax_util.set_ylabel("CPU / Network utilization (%)")
-    ax_npu.set_ylabel("Required Qwen3 NPUs")
-    ax_util.set_title("Piecewise nonlinear utilization and required Qwen3 NPUs vs. intent ratio")
+    ax_util.set_ylabel("CPU / Network / Qwen3 utilization (%)")
+    ax_util.set_title("Piecewise nonlinear utilization vs. intent ratio")
     ax_util.grid(True, alpha=0.3)
     lines = [cpu_line, net_line, npu_line]
     labels = [line.get_label() for line in lines]
@@ -105,7 +103,6 @@ def maybe_write_user_count_plot(config: ModelConfig, out_dir: Path) -> None:
     x = [float(row["user_count"]) / 1_000_000.0 for row in rows]
 
     fig, ax_util = plt.subplots(figsize=(7, 4.2))
-    ax_npu = ax_util.twinx()
     cpu_line, = ax_util.plot(
         x,
         [float(r["cpu_utilization"]) * 100.0 for r in rows],
@@ -120,19 +117,18 @@ def maybe_write_user_count_plot(config: ModelConfig, out_dir: Path) -> None:
         color=NETWORK_COLOR,
         label="Network util",
     )
-    npu_line, = ax_npu.plot(
+    npu_line, = ax_util.plot(
         x,
-        [float(r["required_production_npus"]) for r in rows],
+        [float(r["npu_utilization"]) * 100.0 for r in rows],
         marker="^",
         color=NPU_COLOR,
-        label="Required Qwen3 NPUs",
+        label="Qwen3/NPU util",
     )
     ax_util.axhline(70, color="tab:gray", linestyle="--", linewidth=1, label="70% utilization")
     ax_util.axhline(100, color="tab:red", linestyle="--", linewidth=1, label="100% capacity")
     ax_util.set_xlabel("User count (million users)")
-    ax_util.set_ylabel("CPU / Network utilization (%)")
-    ax_npu.set_ylabel("Required Qwen3 NPUs")
-    ax_util.set_title("Piecewise nonlinear utilization and required Qwen3 NPUs vs. user count (20% intent)")
+    ax_util.set_ylabel("CPU / Network / Qwen3 utilization (%)")
+    ax_util.set_title("Piecewise nonlinear utilization vs. user count (20% intent)")
     ax_util.grid(True, alpha=0.3)
     lines = [cpu_line, net_line, npu_line]
     labels = [line.get_label() for line in lines]

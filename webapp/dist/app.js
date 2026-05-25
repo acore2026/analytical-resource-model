@@ -60,12 +60,10 @@ function updateSummary(result) {
     mustGet("cpuDemand").textContent = `${fmt(result.cpuCoreDemand, 1)} ${t("coresUnit")}`;
     mustGet("ramDemand").textContent = `${fmt(result.ramGb, 1)} GB`;
     mustGet("npuDemand").textContent = pct(result.npuUtil);
-    mustGet("prodNpuDemand").textContent = fmt(result.requiredProductionNpus, 0);
     mustGet("netDemand").textContent = `${fmt(result.networkGbps, 3)} Gbps`;
     setBar("cpuBar", result.cpuUtil, result.cpuStatus);
     setBar("ramBar", result.ramUtil, classifyStatus(result.ramUtil));
     setBar("npuBar", result.npuUtil, result.npuStatus);
-    setBar("prodNpuBar", result.requiredProductionNpus / Math.max(1, result.requiredProductionNpus), result.npuStatus);
     setBar("netBar", result.networkUtil, result.netStatus);
     mustGet("meanLatency").textContent = `${fmt(result.meanLatency, 1)} ms`;
     mustGet("p95Latency").textContent = `${fmt(result.p95Latency, 1)} ms`;
@@ -75,11 +73,7 @@ function updateSummary(result) {
     stateDot.style.background = colorForStatus(result.systemStatus);
     stateDot.style.boxShadow = `0 0 20px ${colorForStatus(result.systemStatus)}`;
     stateText.textContent = statusText(result.systemStatus);
-    const npus = result.requiredProductionNpus;
-    const acceleratorLabel = currentLang === "zh"
-        ? t("accelerator")
-        : (npus === 1 ? t("accelerator") : t("accelerators"));
-    mustGet("bottleneckNote").textContent = `${t("bottleneck")}: ${bottleneckLabel(result)}. ${t("intentTraffic")} ${fmt(result.intentRps, 0)} req/s; Qwen3 ${fmt(result.qwen3RequestRps, 0)} req/s / ${fmt(result.qwen3EffectiveTokenDemand, 0)} ${t("effectiveTokens")}; ${t("npu70")} ${npus} ${acceleratorLabel}.`;
+    mustGet("bottleneckNote").textContent = `${t("bottleneck")}: ${bottleneckLabel(result)}. ${t("intentTraffic")} ${fmt(result.intentRps, 0)} req/s; Qwen3 ${fmt(result.qwen3RequestRps, 0)} req/s / ${fmt(result.qwen3EffectiveTokenDemand, 0)} ${t("effectiveTokens")}; ${t("qwen3ClusterUtil")} ${pct(result.npuUtil)}.`;
     updateEventTable(result);
 }
 function updateTable(rows) {
@@ -91,7 +85,7 @@ function updateTable(rows) {
       <td>${fmt(row.intentRps, 0)}</td>
       <td>${fmt(row.qwen3EffectiveTokenDemand, 0)}</td>
       <td>${pct(row.cpuUtil)}</td>
-      <td>${fmt(row.requiredProductionNpus, 0)}</td>
+      <td>${pct(row.npuUtil)}</td>
       <td>${fmt(row.networkGbps, 3)} Gbps</td>
       <td>${fmt(row.meanLatency, 1)} ms</td>
       <td class="status-${row.systemStatus}">${statusText(row.systemStatus)}</td>
@@ -108,14 +102,13 @@ function drawChart(rows) {
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = "#fbfcf8";
     ctx.fillRect(0, 0, width, height);
-    const pad = { left: 64, right: 88, top: 24, bottom: 44 };
+    const pad = { left: 64, right: 32, top: 24, bottom: 44 };
     const plotW = width - pad.left - pad.right;
     const plotH = height - pad.top - pad.bottom;
     const x = (index) => pad.left + (index / (rows.length - 1)) * plotW;
     const y = (value, max) => pad.top + plotH - (clamp(value, 0, max) / max) * plotH;
-    const finiteUtils = rows.flatMap((row) => [row.cpuUtil, row.networkUtil]).filter(Number.isFinite);
+    const finiteUtils = rows.flatMap((row) => [row.cpuUtil, row.networkUtil, row.npuUtil]).filter(Number.isFinite);
     const maxUtil = Math.max(1.1, ...finiteUtils);
-    const maxNpus = Math.max(10, Math.ceil(Math.max(...rows.map((row) => row.requiredProductionNpus)) / 100) * 100);
     ctx.strokeStyle = "#d7ddd3";
     ctx.lineWidth = 1;
     ctx.fillStyle = "#5f6a61";
@@ -127,13 +120,11 @@ function drawChart(rows) {
         ctx.lineTo(width - pad.right, gy);
         ctx.stroke();
         ctx.fillText(`${Math.round((1 - i / 4) * maxUtil * 100)}%`, 10, gy + 6);
-        ctx.textAlign = "right";
-        ctx.fillText(`${Math.round((1 - i / 4) * maxNpus)}`, width - 12, gy + 6);
-        ctx.textAlign = "left";
     }
     const utilSeries = [
         { key: "cpuUtil", label: t("cpu"), color: "#3c8b4a" },
-        { key: "networkUtil", label: t("network"), color: "#1769d1" }
+        { key: "networkUtil", label: t("network"), color: "#1769d1" },
+        { key: "npuUtil", label: t("npuInference"), color: "#d66a00" }
     ];
     for (const item of utilSeries) {
         ctx.strokeStyle = item.color;
@@ -153,22 +144,6 @@ function drawChart(rows) {
             ctx.fillRect(x(index) - 4, y(row[item.key], maxUtil) - 4, 8, 8);
         });
     }
-    ctx.strokeStyle = "#d66a00";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    rows.forEach((row, index) => {
-        const pointX = x(index);
-        const pointY = y(row.requiredProductionNpus, maxNpus);
-        if (index === 0)
-            ctx.moveTo(pointX, pointY);
-        else
-            ctx.lineTo(pointX, pointY);
-    });
-    ctx.stroke();
-    rows.forEach((row, index) => {
-        ctx.fillStyle = "#d66a00";
-        ctx.fillRect(x(index) - 4, y(row.requiredProductionNpus, maxNpus) - 4, 8, 8);
-    });
     ctx.strokeStyle = "#c94d41";
     ctx.setLineDash([10, 8]);
     ctx.beginPath();
@@ -184,10 +159,7 @@ function drawChart(rows) {
     });
     let legendX = pad.left;
     ctx.textAlign = "left";
-    const legend = [
-        ...utilSeries,
-        { label: t("productionNpuMetric"), color: "#d66a00" }
-    ];
+    const legend = utilSeries;
     for (const item of legend) {
         ctx.fillStyle = item.color;
         ctx.fillRect(legendX, 18, 14, 14);
@@ -207,14 +179,13 @@ function drawUserCountChart() {
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = "#fbfcf8";
     ctx.fillRect(0, 0, width, height);
-    const pad = { left: 64, right: 88, top: 24, bottom: 44 };
+    const pad = { left: 64, right: 32, top: 24, bottom: 44 };
     const plotW = width - pad.left - pad.right;
     const plotH = height - pad.top - pad.bottom;
     const x = (index) => pad.left + (index / (rows.length - 1)) * plotW;
     const y = (value, max) => pad.top + plotH - (clamp(value, 0, max) / max) * plotH;
-    const finiteUtils = rows.flatMap((row) => [row.cpuUtil, row.networkUtil]).filter(Number.isFinite);
+    const finiteUtils = rows.flatMap((row) => [row.cpuUtil, row.networkUtil, row.npuUtil]).filter(Number.isFinite);
     const maxUtil = Math.max(1.1, ...finiteUtils);
-    const maxNpus = Math.max(10, Math.ceil(Math.max(...rows.map((row) => row.requiredProductionNpus)) / 100) * 100);
     ctx.strokeStyle = "#d7ddd3";
     ctx.lineWidth = 1;
     ctx.fillStyle = "#5f6a61";
@@ -227,13 +198,11 @@ function drawUserCountChart() {
         ctx.lineTo(width - pad.right, gy);
         ctx.stroke();
         ctx.fillText(`${Math.round((1 - i / 4) * maxUtil * 100)}%`, 10, gy + 6);
-        ctx.textAlign = "right";
-        ctx.fillText(`${Math.round((1 - i / 4) * maxNpus)}`, width - 12, gy + 6);
-        ctx.textAlign = "left";
     }
     const utilSeries = [
         { key: "cpuUtil", label: t("cpu"), color: "#3c8b4a" },
-        { key: "networkUtil", label: t("network"), color: "#1769d1" }
+        { key: "networkUtil", label: t("network"), color: "#1769d1" },
+        { key: "npuUtil", label: t("npuInference"), color: "#d66a00" }
     ];
     for (const item of utilSeries) {
         ctx.strokeStyle = item.color;
@@ -253,22 +222,6 @@ function drawUserCountChart() {
             ctx.fillRect(x(index) - 4, y(row[item.key], maxUtil) - 4, 8, 8);
         });
     }
-    ctx.strokeStyle = "#d66a00";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    rows.forEach((row, index) => {
-        const pointX = x(index);
-        const pointY = y(row.requiredProductionNpus, maxNpus);
-        if (index === 0)
-            ctx.moveTo(pointX, pointY);
-        else
-            ctx.lineTo(pointX, pointY);
-    });
-    ctx.stroke();
-    rows.forEach((row, index) => {
-        ctx.fillStyle = "#d66a00";
-        ctx.fillRect(x(index) - 4, y(row.requiredProductionNpus, maxNpus) - 4, 8, 8);
-    });
     ctx.strokeStyle = "#c94d41";
     ctx.setLineDash([10, 8]);
     ctx.beginPath();
@@ -284,10 +237,7 @@ function drawUserCountChart() {
     });
     let legendX = pad.left;
     ctx.textAlign = "left";
-    const legend = [
-        ...utilSeries,
-        { label: t("productionNpuMetric"), color: "#d66a00" }
-    ];
+    const legend = utilSeries;
     for (const item of legend) {
         ctx.fillStyle = item.color;
         ctx.fillRect(legendX, 18, 14, 14);

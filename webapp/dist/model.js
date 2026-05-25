@@ -91,23 +91,21 @@ export function evaluate(num, intentRatioPercent = num("intentRatio"), userCount
     const qwen3OutputTokens = Math.max(1, num("qwen3OutputTokens"));
     const qwen3TokensPerRequest = qwen3InputTokens + qwen3OutputTokens;
     const qwen3TokenCapacity = Math.max(1, num("qwen3TokenCapacity"));
-    const qwen3TensorParallel = Math.max(1, num("qwen3TensorParallel"));
-    const qwen3TargetUtil = clamp(num("qwen3TargetUtil") / 100, 0.01, 1);
+    const qwen3TensorParallel = Math.max(1, Math.ceil(num("qwen3TensorParallel")));
+    const qwen3NpuCount = Math.max(0, Math.floor(num("qwen3NpuCount")));
+    const qwen3AvailableReplicas = Math.floor(qwen3NpuCount / qwen3TensorParallel);
+    const qwen3ClusterCapacity = qwen3AvailableReplicas * qwen3TokenCapacity;
     const qwen3RequestRps = intentRps * qwen3InvocationRatio;
     const qwen3TokenDemand = qwen3RequestRps * qwen3TokensPerRequest;
-    const linearRequiredQwen3Replicas = qwen3TokenDemand > 0 ? Math.ceil(qwen3TokenDemand / (qwen3TokenCapacity * qwen3TargetUtil)) : 0;
-    const linearProductionCapacity = linearRequiredQwen3Replicas * qwen3TokenCapacity;
-    const linearNpuUtil = linearProductionCapacity > 0 ? qwen3TokenDemand / linearProductionCapacity : 0;
-    const qwen3EffectiveTokenDemand = qwen3TokenDemand * piecewiseMultiplier(linearNpuUtil);
-    const requiredQwen3Replicas = qwen3EffectiveTokenDemand > 0 ? Math.ceil(qwen3EffectiveTokenDemand / (qwen3TokenCapacity * qwen3TargetUtil)) : 0;
-    const requiredProductionNpus = requiredQwen3Replicas * Math.ceil(qwen3TensorParallel);
-    const productionCapacity = requiredQwen3Replicas * qwen3TokenCapacity;
-    const npuUtil = productionCapacity > 0 ? qwen3EffectiveTokenDemand / productionCapacity : 0;
-    const npuQueueDelay = productionCapacity > 0 ? queueDelayMs(npuUtil, 1000 / productionCapacity) : 0;
+    const qwen3RawUtil = qwen3ClusterCapacity > 0 ? qwen3TokenDemand / qwen3ClusterCapacity : 0;
+    const qwen3EffectiveTokenDemand = qwen3TokenDemand * piecewiseMultiplier(qwen3RawUtil);
+    const npuUtil = qwen3ClusterCapacity > 0 ? qwen3EffectiveTokenDemand / qwen3ClusterCapacity : 0;
+    const npuQueueDelay = qwen3ClusterCapacity > 0 ? queueDelayMs(npuUtil, 1000 / qwen3ClusterCapacity) : 0;
     const qwen3Latency = Math.max(0, num("qwen3LatencyMs")) + npuQueueDelay;
     const activeQwen3Requests = qwen3RequestRps * Math.max(0, num("qwen3LatencyMs")) / 1000;
-    const npuHbmGb = qwen3RequestRps > 0 ? requiredProductionNpus * 16 + activeQwen3Requests * 4 / 1024 : 0;
-    const productionHbmGb = requiredProductionNpus * Math.max(1, num("npuHbmPerNpuGb"));
+    const activeNpuCount = qwen3AvailableReplicas * qwen3TensorParallel;
+    const npuHbmGb = qwen3RequestRps > 0 ? activeNpuCount * 16 + activeQwen3Requests * 4 / 1024 : 0;
+    const productionHbmGb = qwen3NpuCount * Math.max(1, num("npuHbmPerNpuGb"));
     const npuHbmUtil = productionHbmGb > 0 ? npuHbmGb / productionHbmGb : 0;
     const activeRequests = totalRps * baseLatencyAvg / 1000;
     const ramGb = 32 + activeRequests * 128 / 1024 / 1024;
@@ -155,9 +153,9 @@ export function evaluate(num, intentRatioPercent = num("intentRatio"), userCount
         npuUtil,
         qwen3RequestRps,
         qwen3TokenDemand,
+        qwen3RawUtil,
         qwen3EffectiveTokenDemand,
-        requiredQwen3Replicas,
-        requiredProductionNpus,
+        qwen3AvailableReplicas,
         npuHbmGb,
         npuHbmUtil,
         networkGbps,

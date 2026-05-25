@@ -150,6 +150,10 @@
               <input id="npuHbmPerNpuGb" type="number" min="1" step="1" value="32">
             </label>
             <label class="field compact">
+              <span class="label-line"><span data-i18n="qwen3NpuCount">Qwen3 NPU count</span> <span class="unit">(NPUs)</span><span class="help" data-tip-key="qwen3NpuCountTip" data-tip="Configured NPUs available for Qwen3 serving. Utilization is calculated against this fixed cluster size.">?</span></span>
+              <input id="qwen3NpuCount" type="number" min="0" step="1" value="128">
+            </label>
+            <label class="field compact">
               <span class="label-line"><span data-i18n="qwen3InvocationRatio">Qwen3 invocation ratio</span> <span class="unit">(%)</span><span class="help" data-tip-key="qwen3InvocationRatioTip" data-tip="Percentage of intent requests that need Qwen3-30B-A3B. The rest use lightweight intent parsing and tool selection.">?</span></span>
               <input id="qwen3InvocationRatio" type="number" min="0" max="100" step="1" value="10">
             </label>
@@ -168,10 +172,6 @@
             <label class="field compact">
               <span class="label-line"><span data-i18n="qwen3TensorParallel">Qwen3 tensor parallel</span> <span class="unit">(NPUs/replica)</span><span class="help" data-tip-key="qwen3TensorParallelTip" data-tip="NPUs required for one Qwen3 replica. vLLM-Ascend recommends TP >= 4 for 32 GB NPU cards.">?</span></span>
               <input id="qwen3TensorParallel" type="number" min="1" step="1" value="4">
-            </label>
-            <label class="field compact">
-              <span class="label-line"><span data-i18n="qwen3TargetUtil">Qwen3 target utilization</span> <span class="unit">(%)</span><span class="help" data-tip-key="qwen3TargetUtilTip" data-tip="Production sizing target. Required NPUs are calculated so Qwen3 token utilization stays at or below this value.">?</span></span>
-              <input id="qwen3TargetUtil" type="number" min="1" max="100" step="1" value="70">
             </label>
           </div>
           <p class="source-note band-note">
@@ -218,14 +218,9 @@
               <div class="bar"><i id="ramBar"></i></div>
             </article>
             <article class="metric">
-              <span data-i18n="qwen3LoadMetric">Sized Qwen3 util (%)</span>
+              <span data-i18n="qwen3LoadMetric">Qwen3/NPU util (%)</span>
               <strong id="npuDemand">--</strong>
               <div class="bar"><i id="npuBar"></i></div>
-            </article>
-            <article class="metric">
-              <span data-i18n="productionNpuMetric">Required Qwen3 NPUs</span>
-              <strong id="prodNpuDemand">--</strong>
-              <div class="bar"><i id="prodNpuBar"></i></div>
             </article>
             <article class="metric">
               <span data-i18n="bandwidthMetric">Bandwidth (Gbps)</span>
@@ -251,9 +246,9 @@
               <span class="panel-code">05</span>
               <h2 data-i18n="intentSweep">Intent Sweep</h2>
             </div>
-            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share across all request types, sampled every 10 percentage points. Results use fixed nonlinear load bands. Left Y-axis: CPU and network utilization. Right Y-axis: required Qwen3 NPUs.</p>
+            <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share across all request types, sampled every 10 percentage points. Results use fixed nonlinear load bands. Y-axis: CPU, network, and Qwen3/NPU utilization.</p>
             <div class="chart-frame">
-              <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU/Network util (%) · Qwen3 NPUs</div>
+              <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU / Network / Qwen3 util (%)</div>
               <canvas id="sweepChart" width="920" height="360" aria-label="Intent sweep chart"></canvas>
               <div class="axis-label x-axis" data-i18n="xAxisLabel">Intent ratio (%)</div>
             </div>
@@ -264,9 +259,9 @@
               <span class="panel-code">06</span>
               <h2 data-i18n="userCountSweep">User Count Sensitivity</h2>
             </div>
-            <p class="chart-description" data-i18n="userCountSweepDescription">Intent ratio is fixed at 20%. Fixed nonlinear load bands add overhead as the system moves from normal to busy, high-load, and critical operation; Qwen3 line shows required NPU count.</p>
+            <p class="chart-description" data-i18n="userCountSweepDescription">Intent ratio is fixed at 20%. Fixed nonlinear load bands add overhead as the system moves from normal to busy, high-load, and critical operation; Qwen3 line shows NPU utilization.</p>
             <div class="chart-frame">
-              <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU/Network util (%) · Qwen3 NPUs</div>
+              <div class="axis-label y-axis" data-i18n="yAxisLabel">CPU / Network / Qwen3 util (%)</div>
               <canvas id="userCountChart" width="920" height="360" aria-label="User count sensitivity chart"></canvas>
               <div class="axis-label x-axis" data-i18n="userCountXAxisLabel">User count (million users)</div>
             </div>
@@ -286,7 +281,7 @@
                     <th data-i18n="tableIntentRate">Intent rate (req/s)</th>
                     <th data-i18n="tableTokens">Effective Qwen3 tokens/s</th>
                     <th data-i18n="tableCpuUtil">CPU util (%)</th>
-                    <th data-i18n="tableProdNpus">Required Qwen3 NPUs</th>
+                    <th data-i18n="tableNpuUtil">Qwen3 util (%)</th>
                     <th data-i18n="tableBw">BW (Gbps)</th>
                     <th data-i18n="tableMean">Mean (ms)</th>
                     <th data-i18n="tableStatus">Status</th>
