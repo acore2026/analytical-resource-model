@@ -6,105 +6,92 @@ This document explains the main calculation logic in a simple way.
 
 ## One Sentence
 
-We calculate how many control-plane requests arrive, add the extra Agent cost for intent requests, convert complex intent requests into Qwen3 token demand, and then calculate how many production NPUs are required.
+We calculate request volume from users, add Agent cost for intent requests, convert complex intent requests into Qwen3 tokens, apply high-load nonlinear overhead, and calculate required production NPUs.
 
 ## Step 1: Start From Users
 
-The model starts with the number of users and how often one user triggers each control-plane procedure.
+$$
+\mathrm{request\ rate} = \frac{\mathrm{users} \cdot \mathrm{events/user/hour}}{3600}
+$$
 
-```text
-request rate [requests/s] =
-  users * events per user per hour / 3600
-```
-
-For example, the baseline has `3.6M users` and produces `104,300 total requests/s`.
+The baseline has $3.6$ million users and produces $104,300$ total requests/s.
 
 ## Step 2: Find Intent Requests
 
-Any request type may carry intent. The intent ratio is a tunable parameter applied to the full request stream.
+Any request type may carry intent. At $100\%$ intent ratio:
 
-At `100%` intent ratio, the baseline produces:
-
-```text
-intent requests = 104,300 requests/s
-```
+$$
+\lambda_I = 104,300\ \mathrm{requests/s}
+$$
 
 ## Step 3: Add Agent Cost
 
-Every request still has normal core-network cost:
-
-```text
-normal core work = CPU + memory + bandwidth + latency
-```
-
-Intent requests add Agent work:
-
-```text
-intent request = normal core work + Agent parsing/planning/tool-selection cost
-```
+$$
+\mathrm{intent\ request} = \mathrm{normal\ core\ work} + \mathrm{Agent\ parsing/planning/tool\ cost}
+$$
 
 This affects CPU, memory, bandwidth, and latency.
 
 ## Step 4: Convert Qwen3 Requests to Tokens
 
-Not every intent request calls Qwen3. The default assumes:
+By default, $10\%$ of intent requests invoke Qwen3:
 
-```text
-10% of intent requests invoke Qwen3
-```
+$$
+\lambda_Q = 104,300 \cdot 10\% = 10,430\ \mathrm{requests/s}
+$$
 
-So at peak:
+The token profile is:
 
-```text
-Qwen3 requests = 104,300 * 10% = 10,430 requests/s
-```
+$$
+L_Q = 128 + 4 = 132\ \mathrm{tokens/request}
+$$
 
-The benchmark token profile is:
+Raw token demand is:
 
-```text
-128 input tokens + 4 output tokens = 132 tokens/request
-```
+$$
+T_Q = 10,430 \cdot 132 = 1,376,760\ \mathrm{tokens/s}
+$$
 
-Therefore:
+## Step 5: Add Nonlinear High-Load Overhead
 
-```text
-Qwen3 token demand =
-  10,430 requests/s * 132 tokens/request
-  = 1,376,760 tokens/s
-```
+The model applies a saturation multiplier after $60\%$ utilization:
 
-## Step 5: Calculate Production NPUs
+$$
+F(u) = 1 + 0.60 \cdot \left(\frac{\max(0, \min(u,1)-0.60)}{0.40}\right)^2
+$$
 
-The referenced benchmark reports:
+For the default full-intent Qwen3 case:
 
-```text
-1 Qwen3 replica = 15,040 tokens/s
-1 Qwen3 replica uses 4 NPUs
-target utilization = 70%
-```
+$$
+T_{Q,\mathrm{eff}} = 1,427,134\ \mathrm{tokens/s}
+$$
 
-So:
+## Step 6: Calculate Production NPUs
 
-```text
-required replicas =
-  ceil(1,376,760 / (15,040 * 70%))
-  = 131 replicas
+The reference capacity is:
 
-required production NPUs =
-  131 replicas * 4 NPUs/replica
-  = 524 NPUs
-```
+$$
+\mu_Q = 15,040\ \mathrm{tokens/s/replica}, \quad TP_Q = 4\ \mathrm{NPUs/replica}, \quad u_{\mathrm{target}} = 70\%
+$$
+
+Required replicas and NPUs are:
+
+$$
+R_Q = \left\lceil \frac{1,427,134}{15,040 \cdot 70\%} \right\rceil = 136
+$$
+
+$$
+N_Q = 136 \cdot 4 = 544\ \mathrm{NPUs}
+$$
 
 ## Main Message
 
 For the baseline production scenario:
 
-```text
-3.6M users
-104,300 intent requests/s
-10% of intent requests invoke Qwen3
-1,376,760 Qwen3 tokens/s
-524 production NPUs required
-```
+- User population is $3.6$ million.
+- At $100\%$ intent ratio, intent traffic is $104,300$ requests/s.
+- $10\%$ of intent requests invoke Qwen3.
+- Effective Qwen3 demand after nonlinear overhead is $1,427,134$ tokens/s.
+- Required production capacity is $544$ NPUs.
 
 This is the core logic of the analysis.
