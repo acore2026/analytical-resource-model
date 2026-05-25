@@ -1,4 +1,4 @@
-# 面向 Agentic 6G 核心网控制面流程的分析型资源模型
+# 1. 面向 Agentic 6G 核心网控制面流程的分析型资源模型
 
 [English version](agentic_core_resource_model.md)
 
@@ -6,7 +6,7 @@
 
 模型不包含漫游、AF 发起意图和 SRF 路由成本。本文模型是分析型容量模型，不是部署实测结果。
 
-## 负载模型
+## 1.1 负载模型
 
 令 $N_{\mathrm{user}}$ 表示注册用户数， $f_i$ 表示单个用户每小时触发事件 $i$ 的次数。
 
@@ -37,7 +37,7 @@ $$
 | 切换 | 23.1 events/user/hour | 23,100 requests/s | 25 ms | 1.8 CPU-ms/request | 12 KB/request |
 | 寻呼 | 14.0 events/user/hour | 14,000 requests/s | 12 ms | 0.6 CPU-ms/request | 4 KB/request |
 
-## 资源参数
+## 1.2 资源参数
 
 | 参数 | 取值 |
 | --- | ---: |
@@ -62,7 +62,7 @@ $$
 
 $CPU\text{-}ms$ 表示一个 CPU 核被占用一毫秒。例如， $2\ CPU\text{-}ms/request$ 在 $100,000$ requests/s 下消耗 $200$ CPU cores。
 
-## Qwen3 能力参考
+## 1.3 Qwen3 能力参考
 
 [GPUStack 的 Qwen3-30B-A3B on Ascend 910B 基准](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/)报告，在 `128 input tokens` 和 `4 output tokens` 配置下结果为 `15,040.15 total tokens/s`。[vLLM-Ascend 文档](https://docs.vllm.ai/projects/ascend/en/v0.18.0/)包含 Qwen3-30B-A3B 指引；对于 32 GB NPU 卡，模型采用 tensor parallel size $TP_Q=4$。
 
@@ -98,7 +98,7 @@ $$
 C_Q = R_{Q,\mathrm{avail}} \cdot \mu_Q
 $$
 
-## Agentic 成本模型
+## 1.4 Agentic 成本模型
 
 对于非意图请求，增量 Agentic CPU 成本为 $0.30\ CPU\text{-}ms/request$。对于携带意图的请求，CPU 侧 Agent 工作量为 $2.00\ CPU\text{-}ms/request$，不包含 Qwen3 推理。
 
@@ -116,7 +116,7 @@ $$
 
 携带意图请求额外增加 $12\ \mathrm{KB/request}$ 控制面元数据，用于意图容器、任务元数据、工具调用封装以及 Agent 间状态/追踪元数据。
 
-## 凸性非线性开销模型
+## 1.5 凸性非线性开销模型
 
 模型先计算线性需求，再将对应的 CPU、网络或 Qwen3 服务负载输入平滑凸性开销函数。该函数用于表示高并发下有效服务效率下降。
 
@@ -128,7 +128,7 @@ $$
 
 系数 $\alpha=0.15$ 是分析型敏感性参数，不是部署实测值，也不应被表述为文献给出的通用常数。本文末尾的参考文献支持在高并发 LLM 服务中引入非线性开销项，主要原因包括调度、批处理、排队和 KV/cache 压力。具体 $\alpha$ 取值应在系统实现后，使用 CPU profiling、NPU 服务吞吐和网络遥测数据进行校准。当前默认值表示中等非线性开销场景，用于敏感性分析。
 
-### 为什么会出现非线性开销
+### 1.5.1 为什么会出现非线性开销
 
 非线性函数用于表示高并发下有效服务效率下降，而不是表示单个请求的语义工作量发生变化。每增加一单位负载，系统还会额外消耗竞争、调度、内存搬移、排队和运行时协调等容量。
 
@@ -145,7 +145,7 @@ KV/cache 内存压力对 Qwen3 服务尤其重要。在高并发场景下，活�
 
 以下小节说明模型如何将凸性开销函数分别应用到 CPU、Qwen3/NPU、网络和时延。
 
-### CPU 利用率
+### 1.5.2 CPU 利用率
 
 CPU 利用率包含确定性核心网流程工作量和 CPU 侧 Agent 工作量。平均线性 CPU 成本由按流量加权的确定性核心网基础成本和 Agentic CPU 成本组成。意图占比 $s_I$ 决定有多少流量使用意图 Agent CPU 工作量，以及有多少流量使用非意图 Agent CPU 工作量。
 
@@ -165,7 +165,7 @@ $$
 D_{\mathrm{cpu}} = C_{\mathrm{cpu,capacity}} \cdot u_{\mathrm{cpu}}
 $$
 
-### Qwen3/NPU 利用率
+### 1.5.3 Qwen3/NPU 利用率
 
 NPU 利用率由调用 Qwen3 的那部分意图请求驱动。这些请求会先转换为 token 需求，然后与配置的 Qwen3 服务能力进行比较。
 
@@ -185,7 +185,7 @@ $$
 T_{Q,\mathrm{eff}} = C_Q \cdot u_Q
 $$
 
-### 网络利用率
+### 1.5.4 网络利用率
 
 网络利用率包含基础控制面消息流量，以及意图元数据、工具调用封装和 Agent 间协作消息带来的额外流量。网络利用率也使用相同的非线性修正，使排队、缓冲和协调开销反映到有效带宽负载中。
 
@@ -193,7 +193,7 @@ $$
 u_{\mathrm{net}} = F(u_{\mathrm{net,linear}})
 $$
 
-### 时延和排队
+### 1.5.5 时延和排队
 
 排队延迟使用 M/M/1 风格的近似公式表示。 $S$ 是服务时间， $u$ 是瓶颈资源的有效利用率。当 $u$ 接近 $1$ 时，排队延迟会快速增大，因此系统接近饱和时，时延会进入不稳定状态。
 
@@ -201,7 +201,7 @@ $$
 D_{\mathrm{queue}} = \frac{S \cdot u}{1-u}, \quad 0 \le u < 1
 $$
 
-## 分析结果
+## 1.6 分析结果
 
 下表固定用户规模、事件频率和 Qwen3 集群规模，仅以固定 $10\%$ 步长改变全部请求中携带意图的比例。可见结果使用凸性非线性开销模型。意图比例扫描图使用 $1\%$ 采样展示细节。
 
@@ -228,15 +228,15 @@ $$
 
 ![](outputs/agentic_user_count_sensitivity.png)
 
-## 结果解读
+## 1.7 结果解读
 
 在配置 $128$ 张 NPU 用于 Qwen3 服务且 Qwen3 调用比例为 $10\%$ 的情况下，NPU 利用率在 $10\%$ 意图比例时为 $29.8\%$，在 $20\%$ 意图比例时为 $62.1\%$，在 $30\%$ 意图比例时为 $96.9\%$。当意图比例达到 $40\%$ 时，NPU 利用率超过 $100\%$，表示固定 NPU 集群已经过载。更高意图比例需要增加 NPU 容量、降低 Qwen3 调用比例、缩短 token 配置、提升服务吞吐或引入准入控制。
 
-## 模型边界
+## 1.8 模型边界
 
 所有数值均为容量和敏感性分析的分析型输入参数。实际部署结果取决于模型大小、批处理行为、推理硬件、NF 实现、数据库访问时延、消息编码、工具粒度和运营商策略逻辑。实测部署数据可用于校准 CPU 时间、推理时延、内存流量、消息大小和排队行为。
 
-## 参考文献
+## 1.9 参考文献
 
 1. [Sarathi-Serve: Tackling User-Generated Request Variability in LLM Inference Serving](https://arxiv.org/abs/2403.02310)，OSDI 2024 版本见 [PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)。
    该论文没有定义本文使用的凸性函数，也没有给出 $\alpha=0.15$。它对本文有用的证据是：LLM 服务性能受 prefill 和 decode 阶段之间的调度与批处理影响，并且论文结果显示请求速率升高时尾时延会上升。这支持将高负载服务开销建模为非线性，而不是纯线性。

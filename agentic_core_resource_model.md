@@ -1,4 +1,4 @@
-# Analytical Resource Model for Agentic 6G Core Control-Plane Procedures
+# 1. Analytical Resource Model for Agentic 6G Core Control-Plane Procedures
 
 [中文版本](agentic_core_resource_model_zh.md)
 
@@ -6,7 +6,7 @@ This document defines an analytical resource model for the proposed agentic 6G c
 
 Roaming, AF-originated intent, and SRF routing cost are excluded. The model is an analytical capacity model, not a deployment measurement.
 
-## Workload Model
+## 1.1 Workload Model
 
 Traffic is derived from user population and per-user event frequency. Let $N_{\mathrm{user}}$ be the number of registered users, and let $f_i$ be how many times one user triggers event $i$ per hour.
 
@@ -37,7 +37,7 @@ The baseline uses $N_{\mathrm{user}}=3.6\times10^6$ users and $2$ PDU sessions/u
 | Handover | 23.1 events/user/hour | 23,100 requests/s | 25 ms | 1.8 CPU-ms/request | 12 KB/request |
 | Paging | 14.0 events/user/hour | 14,000 requests/s | 12 ms | 0.6 CPU-ms/request | 4 KB/request |
 
-## Resource Parameters
+## 1.2 Resource Parameters
 
 | Parameter | Value |
 | --- | ---: |
@@ -62,7 +62,7 @@ The baseline uses $N_{\mathrm{user}}=3.6\times10^6$ users and $2$ PDU sessions/u
 
 $CPU\text{-}ms$ means one CPU core occupied for one millisecond. For example, $2\ CPU\text{-}ms/request$ at $100,000$ requests/s consumes $200$ CPU cores.
 
-## Qwen3 Capacity Reference
+## 1.3 Qwen3 Capacity Reference
 
 [GPUStack's Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/) reports `15,040.15 total tokens/s` for `128 input tokens` and `4 output tokens`. The [vLLM-Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/) includes Qwen3-30B-A3B guidance; for 32 GB NPU cards, the model uses tensor parallel size $TP_Q=4$.
 
@@ -98,7 +98,7 @@ $$
 C_Q = R_{Q,\mathrm{avail}} \cdot \mu_Q
 $$
 
-## Agentic Cost Model
+## 1.4 Agentic Cost Model
 
 For non-intent requests, incremental agentic CPU cost is $0.30\ CPU\text{-}ms/request$. For intent-bearing requests, CPU-side agent work is $2.00\ CPU\text{-}ms/request$, excluding Qwen3 inference.
 
@@ -116,7 +116,7 @@ $$
 
 Intent-bearing requests add $12\ \mathrm{KB/request}$ of control-plane metadata for intent containers, task metadata, tool invocation wrappers, and inter-agent status/tracing metadata.
 
-## Convex Nonlinear Overhead Model
+## 1.5 Convex Nonlinear Overhead Model
 
 The model first calculates linear demand. The corresponding CPU, network, or Qwen3 serving load then passes through a smooth convex overhead function. This represents the reduction of effective serving efficiency under high concurrency.
 
@@ -128,7 +128,7 @@ $$
 
 The coefficient $\alpha=0.15$ is an analytical sensitivity parameter. It is not a deployment measurement and is not claimed as a universal value from literature. The references at the end of this document support the need for nonlinear overhead terms in high-concurrency LLM serving, especially from scheduling, batching, queueing, and KV/cache pressure. The exact value of $\alpha$ should be calibrated with measured CPU profiling, NPU serving throughput, and network telemetry after an implementation is available. The selected default represents a moderate overhead case for sensitivity analysis.
 
-### Why Nonlinear Overhead Appears
+### 1.5.1 Why Nonlinear Overhead Appears
 
 The nonlinear function represents the reduction of effective serving efficiency under high concurrency, not a change in the semantic workload of each request. Each additional unit of load also consumes capacity through contention, scheduling, memory movement, queueing, and runtime coordination.
 
@@ -145,7 +145,7 @@ The nonlinear assumption is an engineering model derived from these serving-syst
 
 The following subsections show how the model applies the convex overhead function to CPU, Qwen3/NPU, network, and latency.
 
-### CPU Utilization
+### 1.5.2 CPU Utilization
 
 CPU utilization includes deterministic core-network procedure work and CPU-side agent work. The average linear CPU cost per request is calculated as the traffic-weighted deterministic core cost plus the agentic CPU cost. The intent share $s_I$ determines how much traffic uses intent-agent CPU work versus non-intent agent CPU work.
 
@@ -165,7 +165,7 @@ $$
 D_{\mathrm{cpu}} = C_{\mathrm{cpu,capacity}} \cdot u_{\mathrm{cpu}}
 $$
 
-### Qwen3/NPU Utilization
+### 1.5.3 Qwen3/NPU Utilization
 
 NPU utilization is driven by the subset of intent requests that invoke Qwen3. Those requests are converted into token demand and then compared with the configured Qwen3 serving capacity.
 
@@ -185,7 +185,7 @@ $$
 T_{Q,\mathrm{eff}} = C_Q \cdot u_Q
 $$
 
-### Network Utilization
+### 1.5.4 Network Utilization
 
 Network utilization includes baseline control-plane message traffic plus additional intent metadata, tool-invocation wrappers, and inter-agent coordination messages. The same nonlinear adjustment is applied to network utilization so that queueing, buffering, and coordination overhead are reflected in the effective bandwidth load.
 
@@ -193,7 +193,7 @@ $$
 u_{\mathrm{net}} = F(u_{\mathrm{net,linear}})
 $$
 
-### Latency and Queueing
+### 1.5.5 Latency and Queueing
 
 Queueing delay is represented by an M/M/1-style approximation. $S$ is the service time and $u$ is the effective utilization of the bottleneck resource. The delay grows quickly as $u$ approaches $1$, which is why latency becomes unstable near saturation.
 
@@ -201,7 +201,7 @@ $$
 D_{\mathrm{queue}} = \frac{S \cdot u}{1-u}, \quad 0 \le u < 1
 $$
 
-## Analytical Results
+## 1.6 Analytical Results
 
 The table fixes the user population, event frequencies, and Qwen3 cluster size, then varies the percentage of all requests that carry intent in constant $10\%$ steps. The visible results use the convex nonlinear overhead model. The intent-sweep figure uses $1\%$ sampling for visual detail.
 
@@ -228,15 +228,15 @@ The following user-count sensitivity figure fixes the intent ratio at $20\%$ and
 
 ![](outputs/agentic_user_count_sensitivity.png)
 
-## Interpretation
+## 1.7 Interpretation
 
 With $128$ configured NPUs assigned to Qwen3 serving and $10\%$ Qwen3 invocation ratio, NPU utilization is $29.8\%$ at $10\%$ intent ratio, $62.1\%$ at $20\%$ intent ratio, and $96.9\%$ at $30\%$ intent ratio. At $40\%$ intent ratio, NPU utilization exceeds $100\%$, so the fixed NPU cluster is overloaded. Higher intent ratios require more NPU capacity, lower Qwen3 invocation ratio, shorter token profiles, faster serving, or admission control.
 
-## Model Boundary
+## 1.8 Model Boundary
 
 The numerical values are analytical input parameters for capacity and sensitivity analysis. Actual deployment results depend on model size, batching behavior, inference hardware, NF implementation, database access latency, message encoding, tool granularity, and operator policy logic. Measured deployment data can be used to calibrate CPU time, inference latency, memory traffic, message size, and queueing behavior.
 
-## References
+## 1.9 References
 
 1. [Sarathi-Serve: Tackling User-Generated Request Variability in LLM Inference Serving](https://arxiv.org/abs/2403.02310), also published at OSDI 2024 ([PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)).
    This paper does not define our convex function or $\alpha=0.15$. Its useful evidence is that LLM serving performance depends on request scheduling and batching across prefill and decode phases. It reports that tail latency rises as request rate increases, which supports modeling high-load serving overhead as nonlinear instead of purely linear.
