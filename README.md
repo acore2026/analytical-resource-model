@@ -7,8 +7,6 @@ This repository contains an analytical resource model for an agentic 6G core con
 - `S2-2602109_was2600182_pCR_6G_23801-01_KI#18_HW_Agent_architecture.md`: source 3GPP SA2 proposal context.
 - `agentic_core_resource_model.md`: English analytical model and results.
 - `agentic_core_resource_model_zh.md`: Chinese version of the analytical model.
-- `agentic_core_easy_explanation.md`: simplified English explanation.
-- `agentic_core_easy_explanation_zh.md`: simplified Chinese explanation.
 - `scripts/`: Python model implementation and plot generators.
 - `outputs/`: generated CSV and PNG result artifacts.
 - `webapp/`: TypeScript static web calculator.
