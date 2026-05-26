@@ -129,7 +129,21 @@ The lightweight NW-Agent overhead covers request normalization, detection that n
 
 Intent-bearing requests add $12\ \mathrm{KB/request}$ of control-plane metadata for intent containers, task metadata, tool invocation wrappers, and inter-agent status/tracing metadata.
 
-## 1.5 USL-Inspired Nonlinear Overhead Model
+## 1.5 Nonlinear Overhead Rationale and Model
+
+The nonlinear function represents the reduction of effective serving efficiency under high concurrency, not a change in the semantic workload of each request. Each additional unit of load also consumes capacity through contention, scheduling, memory movement, runtime coordination, and coherency effects.
+
+| Resource area         | Nonlinear factor                                                                                                                        | Effect represented in the model                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| CPU                   | Scheduler overhead, lock contention, cache misses, memory access delay, serialization/deserialization, and state-store pressure.        | Effective CPU-ms/request increases as CPU load grows.                                                                   |
+| NPU serving for Qwen3 | Batching inefficiency, request routing, replica scheduling, runtime coordination, cross-replica overhead, and KV/cache memory pressure. | Raw token demand is converted into effective token demand before calculating utilization of the configured NPU cluster. |
+| Network               | Buffering, congestion-control behavior, retransmission risk, and additional control-plane coordination.                                 | Effective bandwidth load increases as network utilization grows.                                                        |
+
+KV/cache memory pressure is important for Qwen3 serving. During high concurrency, active requests keep key-value cache entries, runtime buffers, and scheduling state resident for longer periods. This reduces the effective throughput available for new requests even when the raw token profile per request is unchanged. Therefore, the model does not claim that Qwen3 produces more semantic tokens per request; it uses effective token demand to represent serving-system overhead around the model.
+
+The nonlinear assumption is an analytical model derived from these serving-system effects. USL provides the general contention-plus-coordination structure. The LLM-serving references support applying such an overhead term to Qwen3/NPU serving because batching, scheduling, and KV/cache memory pressure reduce effective serving efficiency under concurrency.
+
+### 1.5.1 USL-Inspired Nonlinear Function
 
 The model first calculates linear demand. The corresponding CPU, network, or Qwen3 serving load then passes through a nonlinear overhead function inspired by the Universal Scalability Law (USL). USL is a standard computer-systems scalability model that separates two effects: resource contention and coordination/coherency overhead. Those two effects match this architecture because agentic control-plane processing can introduce shared state access, scheduling, tool-wrapper coordination, and multi-replica inference serving overhead.
 
@@ -174,21 +188,6 @@ $$
 $$
 
 These coefficients are analytical sensitivity parameters, not deployment measurements. At $u=1.0$, the multiplier is $1.15$, meaning a fully loaded linear model is treated as $15\%$ higher effective demand after contention and coordination overhead. The values should be calibrated with measured CPU profiling, NPU serving throughput, and network telemetry after an implementation is available.
-
-### 1.5.1 Why Nonlinear Overhead Appears
-
-The nonlinear function represents the reduction of effective serving efficiency under high concurrency, not a change in the semantic workload of each request. Each additional unit of load also consumes capacity through contention, scheduling, memory movement, runtime coordination, and coherency effects.
-
-
-| Resource area         | Nonlinear factor                                                                                                                        | Effect represented in the model                                                                                         |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| CPU                   | Scheduler overhead, lock contention, cache misses, memory access delay, serialization/deserialization, and state-store pressure.        | Effective CPU-ms/request increases as CPU load grows.                                                                   |
-| NPU serving for Qwen3 | Batching inefficiency, request routing, replica scheduling, runtime coordination, cross-replica overhead, and KV/cache memory pressure. | Raw token demand is converted into effective token demand before calculating utilization of the configured NPU cluster. |
-| Network               | Buffering, congestion-control behavior, retransmission risk, and additional control-plane coordination.                                 | Effective bandwidth load increases as network utilization grows.                                                        |
-
-KV/cache memory pressure is important for Qwen3 serving. During high concurrency, active requests keep key-value cache entries, runtime buffers, and scheduling state resident for longer periods. This reduces the effective throughput available for new requests even when the raw token profile per request is unchanged. Therefore, the model does not claim that Qwen3 produces more semantic tokens per request; it uses effective token demand to represent serving-system overhead around the model.
-
-The nonlinear assumption is an analytical model derived from these serving-system effects. USL provides the general contention-plus-coordination structure. The LLM-serving references support applying such an overhead term to Qwen3/NPU serving because batching, scheduling, and KV/cache memory pressure reduce effective serving efficiency under concurrency.
 
 The following subsections show how the model applies $F_{\mathrm{USL}}(\cdot)$ to CPU, Qwen3/NPU, and network utilization.
 
