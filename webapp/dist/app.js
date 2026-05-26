@@ -194,10 +194,6 @@ function drawChart(rows) {
         ctx.fillText(item.label, legendX + 20, 32);
         legendX += item.label.length > 14 ? 190 : 120;
     }
-    ctx.fillStyle = "#454d47";
-    ctx.font = "15px Aptos, Segoe UI, sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(t("curvatureNote"), width - pad.right, height - pad.bottom - 8);
 }
 function drawUserCountChart() {
     const canvas = mustGet("userCountChart");
