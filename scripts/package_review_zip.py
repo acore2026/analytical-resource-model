@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import html
-import os
 import re
 import subprocess
 import zipfile
@@ -35,11 +34,14 @@ def convert_inline(text: str) -> str:
         placeholders.append(f"<code>{html.escape(match.group(1))}</code>")
         return f"@@CODE{len(placeholders) - 1}@@"
 
+    def render_inline_math(match: re.Match[str]) -> str:
+        return rf"\({match.group(1)}\)"
+
     text = re.sub(r"`([^`]+)`", hold_code, text)
     text = html.escape(text)
     text = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
     text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', text)
-    text = re.sub(r"\$([^$]+)\$", r'<span class="math">\1</span>', text)
+    text = re.sub(r"\$([^$]+)\$", render_inline_math, text)
     for index, value in enumerate(placeholders):
         text = text.replace(f"@@CODE{index}@@", value)
     return text
@@ -106,7 +108,7 @@ def markdown_to_html(markdown: str, base_dir: Path) -> str:
         if stripped == "$$":
             flush_paragraph()
             if in_math:
-                parts.append(f"<div class=\"math-block\">{html.escape(chr(10).join(math_lines))}</div>")
+                parts.append(f"<div class=\"math-block\">\\[{html.escape(chr(10).join(math_lines))}\\]</div>")
                 math_lines.clear()
                 in_math = False
             else:
@@ -159,6 +161,26 @@ def markdown_to_html(markdown: str, base_dir: Path) -> str:
         index += 1
 
     flush_paragraph()
+    mathjax = """
+    <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\\\(', '\\\\)']],
+        displayMath: [['\\\\[', '\\\\]']],
+        processEscapes: true
+      },
+      svg: { fontCache: 'global' },
+      startup: {
+        pageReady: () => {
+          return MathJax.startup.defaultPageReady().then(() => {
+            document.body.classList.add('mathjax-ready');
+          });
+        }
+      }
+    };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+    """
     css = """
     body { font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", Arial, sans-serif; color: #1f2933; line-height: 1.62; margin: 32px; }
     h1, h2, h3 { color: #102a43; page-break-after: avoid; }
@@ -171,12 +193,11 @@ def markdown_to_html(markdown: str, base_dir: Path) -> str:
     th { background: #f1f5f9; color: #102a43; }
     code { font-family: Consolas, monospace; background: #f1f5f9; padding: 1px 4px; border-radius: 3px; }
     pre { background: #f8fafc; border: 1px solid #cbd5e1; padding: 10px; overflow-wrap: break-word; white-space: pre-wrap; }
-    .math, .math-block { font-family: "Times New Roman", "Noto Serif CJK SC", serif; color: #334e68; }
-    .math-block { background: #f8fafc; border-left: 3px solid #829ab1; padding: 8px 10px; margin: 10px 0; white-space: pre-wrap; }
+    .math-block { background: #f8fafc; border-left: 3px solid #829ab1; padding: 8px 10px; margin: 10px 0; overflow-x: auto; }
     img { max-width: 100%; display: block; margin: 16px auto; page-break-inside: avoid; }
     a { color: #0b69a3; text-decoration: none; }
     """
-    return f"<!doctype html><html><head><meta charset=\"utf-8\"><base href=\"{base_dir.as_uri()}/\"><style>{css}</style></head><body>{''.join(parts)}</body></html>"
+    return f"<!doctype html><html><head><meta charset=\"utf-8\"><base href=\"{base_dir.as_uri()}/\">{mathjax}<style>{css}</style></head><body>{''.join(parts)}</body></html>"
 
 
 def write_html(markdown_path: Path, html_path: Path) -> None:
@@ -196,6 +217,9 @@ def html_to_pdf(chrome: str, html_path: Path, pdf_path: Path) -> None:
             "--disable-dev-shm-usage",
             "--disable-crash-reporter",
             "--disable-crashpad",
+            "--run-all-compositor-stages-before-draw",
+            "--virtual-time-budget=8000",
+            "--print-to-pdf-no-header",
             f"--user-data-dir={chrome_profile}",
             f"--print-to-pdf={pdf_path}",
             html_path.as_uri(),
