@@ -251,6 +251,26 @@ $$
 
 其中： $u_{\mathrm{net}}$ 表示加入非线性开销后的有效网络利用率； $u_{\mathrm{net,linear}}$ 表示加入开销前的原始网络利用率； $F_{\mathrm{USL}}(\cdot)$ 表示基于 USL 的开销函数。
 
+### 1.5.5 内存流量
+
+内存流量表示由请求上下文访问、Agent 状态访问、工具封装元数据、序列化/反序列化，以及缓存或状态存储交互造成的内存和数据搬移压力。它不同于常驻 RAM 用量。常驻 RAM 以 GB 表示，而内存流量以 Gbps 表示。
+
+模型先计算单个请求的加权平均内存流量：
+
+$$
+B_{\mathrm{mem,req}} = (1-s_I)B_{\mathrm{mem,nonintent}} + s_I B_{\mathrm{mem,intent}}
+$$
+
+其中： $B_{\mathrm{mem,req}}$ 表示加权平均内存流量，单位为 KB/request； $s_I$ 表示总意图占比； $B_{\mathrm{mem,nonintent}}$ 表示非意图请求内存流量，单位为 KB/request，默认值为 $64\ \mathrm{KB/request}$ ； $B_{\mathrm{mem,intent}}$ 表示意图请求内存流量，单位为 KB/request，默认值为 $512\ \mathrm{KB/request}$ 。
+
+然后，根据总请求速率计算内存流量需求：
+
+$$
+D_{\mathrm{mem}} = \lambda_{\mathrm{total}} \cdot B_{\mathrm{mem,req}} \cdot \frac{8}{10^6}
+$$
+
+其中： $D_{\mathrm{mem}}$ 表示内存流量需求，单位为 Gbps； $\lambda_{\mathrm{total}}$ 表示总请求速率，单位为 requests/s； $B_{\mathrm{mem,req}}$ 表示加权平均内存流量，单位为 KB/request；系数 $8/10^6$ 用于将 KB/s 转换为 Gbps。
+
 ## 1.6 分析结果
 
 下表固定用户规模、事件频率和 Qwen3 集群规模，仅以固定 $10\%$ 步长改变全部请求中携带意图的比例。可见资源利用率结果使用基于 USL 的非线性开销模型。意图比例扫描图使用 $1\%$ 采样展示细节。

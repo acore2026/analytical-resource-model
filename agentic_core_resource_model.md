@@ -253,6 +253,26 @@ $$
 
 Where: $u_{\mathrm{net}}$ is effective network utilization after nonlinear overhead; $u_{\mathrm{net,linear}}$ is raw network utilization before overhead; $F_{\mathrm{USL}}(\cdot)$ is the USL-inspired overhead function.
 
+### 1.5.5 Memory Traffic
+
+Memory traffic is the estimated memory and data-movement pressure caused by request context access, agent state access, tool-wrapper metadata, serialization/deserialization, and cache or state-store interaction. It is different from resident RAM usage. Resident RAM is reported in GB, while memory traffic is reported as a data movement rate in Gbps.
+
+The model first calculates weighted average memory traffic per request:
+
+$$
+B_{\mathrm{mem,req}} = (1-s_I)B_{\mathrm{mem,nonintent}} + s_I B_{\mathrm{mem,intent}}
+$$
+
+Where: $B_{\mathrm{mem,req}}$ is weighted average memory traffic in KB/request; $s_I$ is the total intent share; $B_{\mathrm{mem,nonintent}}$ is non-intent memory traffic in KB/request, with default value $64\ \mathrm{KB/request}$; $B_{\mathrm{mem,intent}}$ is intent memory traffic in KB/request, with default value $512\ \mathrm{KB/request}$.
+
+The memory traffic demand is then derived from total request rate:
+
+$$
+D_{\mathrm{mem}} = \lambda_{\mathrm{total}} \cdot B_{\mathrm{mem,req}} \cdot \frac{8}{10^6}
+$$
+
+Where: $D_{\mathrm{mem}}$ is memory traffic demand in Gbps; $\lambda_{\mathrm{total}}$ is total request rate in requests/s; $B_{\mathrm{mem,req}}$ is weighted average memory traffic in KB/request; the factor $8/10^6$ converts KB/s to Gbps.
+
 ## 1.6 Analytical Results
 
 The table fixes the user population, event frequencies, and Qwen3 cluster size, then varies the percentage of all requests that carry intent in constant $10\%$ steps. The visible resource-utilization results use the USL-inspired nonlinear overhead model. The intent-sweep figure uses $1\%$ sampling for visual detail.
