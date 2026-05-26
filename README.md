@@ -23,7 +23,7 @@ The model starts from:
 4. Qwen3 invocation ratio for intent requests.
 5. Resource assumptions for CPU, memory, NPU, bandwidth, and latency.
 
-It then calculates request rate, intent request rate, Qwen3 token demand, smooth convex nonlinear overhead, CPU utilization, NPU utilization against a configured cluster, network utilization, and latency.
+It then calculates request rate, intent request rate, Qwen3 token demand, USL-inspired nonlinear overhead, CPU utilization, NPU utilization against a configured cluster, network utilization, and latency.
 
 ## Run the Python Model
 

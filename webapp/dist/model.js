@@ -1,5 +1,6 @@
 import { EVENTS } from "./config.js";
-const NONLINEAR_ALPHA = 0.15;
+const USL_CONTENTION_SIGMA = 0.05;
+const USL_COHERENCY_KAPPA = 0.10;
 export function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
 }
@@ -7,11 +8,13 @@ function effectiveLoadMultiplier(load) {
     const boundedLoad = Math.max(0, load);
     if (boundedLoad === 0)
         return 1;
-    return convexEffectiveLoad(boundedLoad) / boundedLoad;
+    return uslEffectiveLoad(boundedLoad) / boundedLoad;
 }
-function convexEffectiveLoad(load) {
+function uslEffectiveLoad(load) {
     const boundedLoad = Math.max(0, load);
-    return boundedLoad + NONLINEAR_ALPHA * boundedLoad * boundedLoad;
+    return boundedLoad * (1
+        + USL_CONTENTION_SIGMA * boundedLoad
+        + USL_COHERENCY_KAPPA * boundedLoad * boundedLoad);
 }
 export function classifyStatus(util, degraded = 0.7, highRisk = 0.85) {
     if (util >= 1)

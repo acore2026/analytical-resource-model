@@ -2,7 +2,8 @@ import { EVENTS } from "./config.js";
 import type { EventDefinition, EventLoad, Result, SystemStatus } from "./types.js";
 
 export type NumericInput = (id: string) => number;
-const NONLINEAR_ALPHA = 0.15;
+const USL_CONTENTION_SIGMA = 0.05;
+const USL_COHERENCY_KAPPA = 0.10;
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -11,12 +12,16 @@ export function clamp(value: number, min: number, max: number): number {
 function effectiveLoadMultiplier(load: number): number {
   const boundedLoad = Math.max(0, load);
   if (boundedLoad === 0) return 1;
-  return convexEffectiveLoad(boundedLoad) / boundedLoad;
+  return uslEffectiveLoad(boundedLoad) / boundedLoad;
 }
 
-function convexEffectiveLoad(load: number): number {
+function uslEffectiveLoad(load: number): number {
   const boundedLoad = Math.max(0, load);
-  return boundedLoad + NONLINEAR_ALPHA * boundedLoad * boundedLoad;
+  return boundedLoad * (
+    1
+    + USL_CONTENTION_SIGMA * boundedLoad
+    + USL_COHERENCY_KAPPA * boundedLoad * boundedLoad
+  );
 }
 
 export function classifyStatus(util: number, degraded = 0.7, highRisk = 0.85): SystemStatus {

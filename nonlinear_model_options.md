@@ -1,6 +1,6 @@
 # Nonlinear Model Options for Resource Analysis
 
-This document compares candidate extensions for modeling non-linear resource growth in the agentic 6G core resource model. The selected model for the analytical report and web calculator is Option 4, the smooth convex overhead model.
+This document compares candidate extensions for modeling non-linear resource growth in the agentic 6G core resource model. The selected model for the analytical report and web calculator is Option 5, the USL-inspired overhead model.
 
 ![Linear and nonlinear resource model comparison](outputs/nonlinear_model_options.png)
 
@@ -89,19 +89,38 @@ This option is easy to explain verbally: normal, busy, high-load, and critical o
 
 ## Option 4: Smooth Convex Curve
 
-The selected model uses a compact convex function:
+This compact convex function was the previous simple nonlinear candidate:
 
 ```text
 F_convex(L) = L + alpha * L^2
 ```
 
-Example parameter used in the report:
+Example parameter:
 
 | Parameter | Value | Meaning |
 | --- | ---: | --- |
 | `alpha` | 0.15 | Additional contention overhead as normalized load grows. |
 
-This option is selected because it has no artificial tier boundaries, produces visible curvature, and remains simple enough to explain in one equation.
+This option has no artificial tier boundaries, produces visible curvature, and remains simple enough to explain in one equation. Its limitation is that the coefficient is not tied to a standard scalability model.
+
+## Option 5: USL-Inspired Curve
+
+The selected model uses a normalized demand-side form inspired by the Universal Scalability Law:
+
+```text
+M_USL(L) = 1 + sigma * L + kappa * L^2
+
+D_USL = L * M_USL(L)
+```
+
+Example parameters used in the report:
+
+| Parameter | Value | Meaning |
+| --- | ---: | --- |
+| `sigma` | 0.05 | Contention overhead. |
+| `kappa` | 0.10 | Coordination or coherency overhead. |
+
+This option keeps the curve smooth, avoids artificial tier boundaries, and uses terminology from a recognized computer-systems scalability model. At full normalized load, the default multiplier is `1.15`, so it remains a moderate nonlinear-overhead assumption.
 
 ## Comparison
 
@@ -110,7 +129,8 @@ This option is selected because it has no artificial tier boundaries, produces v
 | Linear | Most transparent and easiest to reproduce. | Understates high-load overhead. | Baseline capacity model. |
 | Saturation curve | Smooth and close to real performance degradation. | Requires selecting `knee`, `alpha`, and `power`. | Official report figure and sensitivity analysis. |
 | Piecewise tiers | Easy to explain with load bands. | Tier boundaries are artificial. | Operational explanation only. |
-| Smooth convex curve | Smooth, compact, and visibly nonlinear. | Requires calibrating `alpha` with deployment data. | Selected model for the report and calculator. |
+| Smooth convex curve | Smooth, compact, and visibly nonlinear. | Coefficient is not tied to a named scalability model. | Simple alternative. |
+| USL-inspired curve | Uses contention and coordination terms from a known scalability law. | Coefficients still require deployment calibration. | Selected model for the report and calculator. |
 
 ## Selection Criteria
 
@@ -121,6 +141,6 @@ The final model should be selected based on the intended message:
 | Keep the paper conservative and simple. | Linear model |
 | Show realistic high-load curvature while keeping formulas compact. | Saturation curve |
 | Explain operational bands to non-technical reviewers. | Piecewise tiers |
-| Avoid artificial bend points while keeping the formula easy. | Smooth convex curve |
+| Avoid artificial bend points and use a known scalability structure. | USL-inspired curve |
 
-For the agentic core resource paper, the selected model is the smooth convex curve because it avoids artificial slope-change points while still showing nonlinear high-load behavior.
+For the agentic core resource paper, the selected model is the USL-inspired curve because it avoids artificial slope-change points and gives a clearer explanation: the first extra term represents contention, and the second extra term represents coordination/coherency overhead.

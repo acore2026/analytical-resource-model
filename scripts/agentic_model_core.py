@@ -7,7 +7,8 @@ from typing import Dict
 
 from agentic_model_config import EVENTS, EventType, ModelConfig
 
-NONLINEAR_ALPHA = 0.15
+USL_CONTENTION_SIGMA = 0.05
+USL_COHERENCY_KAPPA = 0.10
 
 
 def event_rps(config: ModelConfig, event: EventType) -> float:
@@ -18,18 +19,22 @@ def total_rps(config: ModelConfig) -> float:
     return sum(event_rps(config, event) for event in EVENTS)
 
 
-def convex_effective_load(load: float, alpha: float = NONLINEAR_ALPHA) -> float:
-    """Convex overhead for contention and memory-pressure sensitivity."""
+def usl_effective_load(
+    load: float,
+    sigma: float = USL_CONTENTION_SIGMA,
+    kappa: float = USL_COHERENCY_KAPPA,
+) -> float:
+    """USL-inspired load after contention and coordination overhead."""
     bounded_load = max(0.0, load)
-    return bounded_load + alpha * bounded_load * bounded_load
+    return bounded_load * (1.0 + sigma * bounded_load + kappa * bounded_load * bounded_load)
 
 
-def convex_multiplier(load: float) -> float:
-    """Effective multiplier implied by the convex nonlinear load function."""
+def usl_multiplier(load: float) -> float:
+    """Effective multiplier implied by the USL-inspired nonlinear function."""
     bounded_load = max(0.0, load)
     if bounded_load == 0.0:
         return 1.0
-    return convex_effective_load(bounded_load) / bounded_load
+    return usl_effective_load(bounded_load) / bounded_load
 
 
 def status(util: float, degraded: float, high_risk: float) -> str:
@@ -77,7 +82,7 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
         if qwen3_cluster_token_capacity_tps
         else 0.0
     )
-    qwen3_nonlinear_multiplier = convex_multiplier(qwen3_raw_util)
+    qwen3_nonlinear_multiplier = usl_multiplier(qwen3_raw_util)
     qwen3_effective_token_demand_tps = qwen3_token_demand_tps * qwen3_nonlinear_multiplier
 
     base_cpu_ms_avg = weighted_average(config, "base_cpu_ms")
@@ -88,7 +93,7 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     linear_cpu_ms_per_request = base_cpu_ms_avg + agent_cpu_ms_avg
     linear_cpu_core_demand = rps_total * linear_cpu_ms_per_request / 1000.0
     linear_cpu_util = linear_cpu_core_demand / config.cpu_cores
-    cpu_nonlinear_multiplier = convex_multiplier(linear_cpu_util)
+    cpu_nonlinear_multiplier = usl_multiplier(linear_cpu_util)
     cpu_ms_per_request = linear_cpu_ms_per_request * cpu_nonlinear_multiplier
     cpu_core_demand = rps_total * cpu_ms_per_request / 1000.0
     cpu_util = cpu_core_demand / config.cpu_cores
@@ -100,7 +105,7 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
     )
     linear_bandwidth_gbps = rps_total * bandwidth_kb_per_request * 8.0 / 1_000_000.0
     linear_network_util = linear_bandwidth_gbps / config.nic_gbps
-    network_nonlinear_multiplier = convex_multiplier(linear_network_util)
+    network_nonlinear_multiplier = usl_multiplier(linear_network_util)
     bandwidth_gbps = linear_bandwidth_gbps * network_nonlinear_multiplier
     network_util = bandwidth_gbps / config.nic_gbps
 

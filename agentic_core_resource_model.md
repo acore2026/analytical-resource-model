@@ -56,7 +56,7 @@ The baseline uses $N_{\mathrm{user}}=3.6\times10^6$ users and $2$ PDU sessions/u
 | Qwen3 token capacity | 15,040 tokens/s/replica |
 | Qwen3 tensor parallel size | 4 NPUs/replica |
 | Network capacity | 100 Gbps |
-| Nonlinear overhead model | Smooth convex overhead curve |
+| Nonlinear overhead model | USL-inspired contention and coordination curve |
 | Non-intent agent CPU cost | 0.3 CPU-ms/request |
 | Intent agent CPU cost | 2.0 CPU-ms/request |
 | Non-intent agent latency | 1 ms/request |
@@ -146,23 +146,41 @@ Where: $D_{Q,\mathrm{service}}$ is the Qwen3 inference service time per request;
 
 Intent-bearing requests add $12\ \mathrm{KB/request}$ of control-plane metadata for intent containers, task metadata, tool invocation wrappers, and inter-agent status/tracing metadata.
 
-## 1.5 Convex Nonlinear Overhead Model
+## 1.5 USL-Inspired Nonlinear Overhead Model
 
-The model first calculates linear demand. The corresponding CPU, network, or Qwen3 serving load then passes through a smooth convex overhead function. This represents the reduction of effective serving efficiency under high concurrency.
+The model first calculates linear demand. The corresponding CPU, network, or Qwen3 serving load then passes through a nonlinear overhead function inspired by the Universal Scalability Law (USL). USL is a standard computer-systems scalability model that separates two effects: resource contention and coordination/coherency overhead. Those two effects match this architecture because agentic control-plane processing can introduce shared state access, scheduling, tool-wrapper coordination, and multi-replica inference serving overhead.
 
-Let $u$ be the raw linear utilization, and let $F(u)$ be the effective utilization after contention overhead:
+The classical USL throughput form is:
 
 $$
-F(u)=u+\alpha u^2,\quad \alpha=0.15
+C(N)=\frac{N}{1+\alpha(N-1)+\beta N(N-1)}
 $$
 
-Where: $F(u)$ is the effective utilization after nonlinear overhead; $u$ is the raw linear utilization before overhead; $\alpha$ is the nonlinear overhead coefficient; $\alpha=0.15$ is the default moderate-overhead assumption.
+Where: $C(N)$ is relative system throughput with $N$ parallel workers; $\alpha$ represents contention; $\beta$ represents coherency or coordination cost.
 
-The coefficient $\alpha=0.15$ is an analytical sensitivity parameter. It is not a deployment measurement and is not claimed as a universal value from literature. The references at the end of this document support the need for nonlinear overhead terms in high-concurrency LLM serving, especially from scheduling, batching, runtime coordination, and KV/cache pressure. The exact value of $\alpha$ should be calibrated with measured CPU profiling, NPU serving throughput, and network telemetry after an implementation is available. The selected default represents a moderate overhead case for sensitivity analysis.
+This paper uses a normalized demand-side form of the same idea:
+
+$$
+M_{\mathrm{USL}}(u)=1+\sigma u+\kappa u^2
+$$
+
+$$
+F_{\mathrm{USL}}(u)=u \cdot M_{\mathrm{USL}}(u)
+$$
+
+Where: $u$ is the raw linear utilization before nonlinear overhead; $M_{\mathrm{USL}}(u)$ is the overhead multiplier; $F_{\mathrm{USL}}(u)$ is the effective utilization after nonlinear overhead; $\sigma$ is the contention coefficient; $\kappa$ is the coordination/coherency coefficient.
+
+The default coefficients are:
+
+$$
+\sigma=0.05,\quad \kappa=0.10
+$$
+
+These coefficients are analytical sensitivity parameters, not deployment measurements. At $u=1.0$, the multiplier is $1.15$, meaning a fully loaded linear model is treated as $15\%$ higher effective demand after contention and coordination overhead. The values should be calibrated with measured CPU profiling, NPU serving throughput, and network telemetry after an implementation is available.
 
 ### 1.5.1 Why Nonlinear Overhead Appears
 
-The nonlinear function represents the reduction of effective serving efficiency under high concurrency, not a change in the semantic workload of each request. Each additional unit of load also consumes capacity through contention, scheduling, memory movement, and runtime coordination.
+The nonlinear function represents the reduction of effective serving efficiency under high concurrency, not a change in the semantic workload of each request. Each additional unit of load also consumes capacity through contention, scheduling, memory movement, runtime coordination, and coherency effects.
 
 | Resource area | Nonlinear factor | Effect represented in the model |
 | --- | --- | --- |
@@ -173,9 +191,9 @@ The nonlinear function represents the reduction of effective serving efficiency 
 
 KV/cache memory pressure is important for Qwen3 serving. During high concurrency, active requests keep key-value cache entries, runtime buffers, and scheduling state resident for longer periods. This reduces the effective throughput available for new requests even when the raw token profile per request is unchanged. Therefore, the model does not claim that Qwen3 produces more semantic tokens per request; it uses effective token demand to represent serving-system overhead around the model.
 
-The nonlinear assumption is an engineering model derived from these serving-system effects. The cited papers do not define the exact function $F(u)=u+\alpha u^2$ or the coefficient $\alpha=0.15$; they justify why a purely linear model can understate high-load overhead.
+The nonlinear assumption is an analytical model derived from these serving-system effects. USL provides the general contention-plus-coordination structure. The LLM-serving references support applying such an overhead term to Qwen3/NPU serving because batching, scheduling, and KV/cache memory pressure reduce effective serving efficiency under concurrency.
 
-The following subsections show how the model applies the convex overhead function to CPU, Qwen3/NPU, and network utilization. Latency is then calculated as a direct no-queue processing-time estimate.
+The following subsections show how the model applies $F_{\mathrm{USL}}(\cdot)$ to CPU, Qwen3/NPU, and network utilization. Latency is then calculated as a direct no-queue processing-time estimate.
 
 ### 1.5.2 CPU Utilization
 
@@ -187,13 +205,13 @@ $$
 
 Where: $C_{\mathrm{cpu,linear}}$ is average CPU cost per request before nonlinear overhead; $\lambda_i/\lambda_{\mathrm{total}}$ is the traffic share of event $i$; $C_{\mathrm{base},i}$ is the deterministic core-network CPU cost of event $i$; $s_I$ is the total intent share; $C_{\mathrm{agent,intent}}$ is intent-agent CPU cost; $C_{\mathrm{agent,nonintent}}$ is non-intent agent CPU cost.
 
-The raw CPU utilization is then passed through the convex function $F(\cdot)$ to represent scheduling, contention, and memory-pressure overhead under high load.
+The raw CPU utilization is then passed through $F_{\mathrm{USL}}(\cdot)$ to represent scheduling, contention, and memory-pressure overhead under high load.
 
 $$
-u_{\mathrm{cpu}} = F(u_{\mathrm{cpu,linear}})
+u_{\mathrm{cpu}} = F_{\mathrm{USL}}(u_{\mathrm{cpu,linear}})
 $$
 
-Where: $u_{\mathrm{cpu}}$ is effective CPU utilization after nonlinear overhead; $u_{\mathrm{cpu,linear}}$ is raw CPU utilization before overhead; $F(\cdot)$ is the convex overhead function.
+Where: $u_{\mathrm{cpu}}$ is effective CPU utilization after nonlinear overhead; $u_{\mathrm{cpu,linear}}$ is raw CPU utilization before overhead; $F_{\mathrm{USL}}(\cdot)$ is the USL-inspired overhead function.
 
 The effective CPU demand is obtained by multiplying CPU capacity by the effective CPU utilization.
 
@@ -213,13 +231,13 @@ $$
 
 Where: $u_{Q,\mathrm{linear}}$ is raw Qwen3/NPU utilization before nonlinear overhead; $T_Q$ is raw Qwen3 token demand; $C_Q$ is configured Qwen3 token capacity.
 
-The raw NPU utilization is also passed through $F(\cdot)$ to represent batching inefficiency, runtime scheduling, and KV/cache memory pressure.
+The raw NPU utilization is also passed through $F_{\mathrm{USL}}(\cdot)$ to represent batching inefficiency, runtime scheduling, and KV/cache memory pressure.
 
 $$
-u_Q = F(u_{Q,\mathrm{linear}})
+u_Q = F_{\mathrm{USL}}(u_{Q,\mathrm{linear}})
 $$
 
-Where: $u_Q$ is effective Qwen3/NPU utilization after nonlinear overhead; $u_{Q,\mathrm{linear}}$ is raw Qwen3/NPU utilization; $F(\cdot)$ is the convex overhead function.
+Where: $u_Q$ is effective Qwen3/NPU utilization after nonlinear overhead; $u_{Q,\mathrm{linear}}$ is raw Qwen3/NPU utilization; $F_{\mathrm{USL}}(\cdot)$ is the USL-inspired overhead function.
 
 The effective Qwen3 token demand is the token demand that would produce the same effective NPU utilization after nonlinear overhead.
 
@@ -234,10 +252,10 @@ Where: $T_{Q,\mathrm{eff}}$ is effective Qwen3 token demand in tokens/s after no
 Network utilization includes baseline control-plane message traffic plus additional intent metadata, tool-invocation wrappers, and inter-agent coordination messages. The same nonlinear adjustment is applied to network utilization so that buffering, congestion-control behavior, and coordination overhead are reflected in the effective bandwidth load.
 
 $$
-u_{\mathrm{net}} = F(u_{\mathrm{net,linear}})
+u_{\mathrm{net}} = F_{\mathrm{USL}}(u_{\mathrm{net,linear}})
 $$
 
-Where: $u_{\mathrm{net}}$ is effective network utilization after nonlinear overhead; $u_{\mathrm{net,linear}}$ is raw network utilization before overhead; $F(\cdot)$ is the convex overhead function.
+Where: $u_{\mathrm{net}}$ is effective network utilization after nonlinear overhead; $u_{\mathrm{net,linear}}$ is raw network utilization before overhead; $F_{\mathrm{USL}}(\cdot)$ is the USL-inspired overhead function.
 
 ### 1.5.5 No-Queue Latency
 
@@ -259,21 +277,21 @@ Where: $D_{\mathrm{intent},i}$ is the no-queue latency of an intent request of t
 
 ## 1.6 Analytical Results
 
-The table fixes the user population, event frequencies, and Qwen3 cluster size, then varies the percentage of all requests that carry intent in constant $10\%$ steps. The visible resource-utilization results use the convex nonlinear overhead model. The latency column is a no-queue processing-time estimate. The intent-sweep figure uses $1\%$ sampling for visual detail.
+The table fixes the user population, event frequencies, and Qwen3 cluster size, then varies the percentage of all requests that carry intent in constant $10\%$ steps. The visible resource-utilization results use the USL-inspired nonlinear overhead model. The latency column is a no-queue processing-time estimate. The intent-sweep figure uses $1\%$ sampling for visual detail.
 
 | Intent ratio | Total intent share | Intent rps | Qwen3 rps | Effective Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | NPU util | Network bandwidth | Mean latency | Status |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 0% | 0.0% | 0 | 0 | 0 | 171.2 | 66.9% | 53.402 Gbps | 0.0% | 6.848 Gbps | 20.5 ms | stable |
-| 10% | 10.0% | 10,430 | 1,043 | 143,584 | 192.4 | 75.2% | 90.783 Gbps | 29.8% | 7.871 Gbps | 21.1 ms | degraded |
-| 20% | 20.0% | 20,860 | 2,086 | 298,982 | 213.9 | 83.6% | 128.164 Gbps | 62.1% | 8.897 Gbps | 21.6 ms | degraded |
-| 30% | 30.0% | 31,290 | 3,129 | 466,196 | 235.9 | 92.1% | 165.545 Gbps | 96.9% | 9.927 Gbps | 22.2 ms | high_risk |
-| 40% | 40.0% | 41,720 | 4,172 | 645,225 | 258.1 | 100.8% | 202.926 Gbps | 134.1% | 10.959 Gbps | 22.8 ms | unstable |
-| 50% | 50.0% | 52,150 | 5,215 | 836,070 | 280.8 | 109.7% | 240.307 Gbps | 173.7% | 11.994 Gbps | 23.4 ms | unstable |
-| 60% | 60.0% | 62,580 | 6,258 | 1,038,729 | 303.8 | 118.7% | 277.688 Gbps | 215.8% | 13.032 Gbps | 24.0 ms | unstable |
-| 70% | 70.0% | 73,010 | 7,301 | 1,253,204 | 327.2 | 127.8% | 315.069 Gbps | 260.4% | 14.073 Gbps | 24.5 ms | unstable |
-| 80% | 80.0% | 83,440 | 8,344 | 1,479,493 | 350.9 | 137.1% | 352.451 Gbps | 307.4% | 15.118 Gbps | 25.1 ms | unstable |
-| 90% | 90.0% | 93,870 | 9,387 | 1,717,598 | 375.1 | 146.5% | 389.832 Gbps | 356.9% | 16.165 Gbps | 25.7 ms | unstable |
-| 100% | 100.0% | 104,300 | 10,430 | 1,967,518 | 399.5 | 156.1% | 427.213 Gbps | 408.8% | 17.215 Gbps | 26.3 ms | unstable |
+| 0% | 0.0% | 0 | 0 | 0 | 167.5 | 65.4% | 53.402 Gbps | 0.0% | 6.805 Gbps | 20.5 ms | stable |
+| 10% | 10.0% | 10,430 | 1,043 | 140,772 | 188.6 | 73.7% | 90.783 Gbps | 29.2% | 7.815 Gbps | 21.1 ms | degraded |
+| 20% | 20.0% | 20,860 | 2,086 | 292,242 | 210.4 | 82.2% | 128.164 Gbps | 60.7% | 8.827 Gbps | 21.6 ms | degraded |
+| 30% | 30.0% | 31,290 | 3,129 | 461,170 | 232.8 | 90.9% | 165.545 Gbps | 95.8% | 9.840 Gbps | 22.2 ms | high_risk |
+| 40% | 40.0% | 41,720 | 4,172 | 654,315 | 255.9 | 100.0% | 202.926 Gbps | 136.0% | 10.855 Gbps | 22.8 ms | unstable |
+| 50% | 50.0% | 52,150 | 5,215 | 878,438 | 279.8 | 109.3% | 240.307 Gbps | 182.5% | 11.871 Gbps | 23.4 ms | unstable |
+| 60% | 60.0% | 62,580 | 6,258 | 1,140,298 | 304.6 | 119.0% | 277.688 Gbps | 236.9% | 12.890 Gbps | 24.0 ms | unstable |
+| 70% | 70.0% | 73,010 | 7,301 | 1,446,655 | 330.2 | 129.0% | 315.069 Gbps | 300.6% | 13.909 Gbps | 24.5 ms | unstable |
+| 80% | 80.0% | 83,440 | 8,344 | 1,804,268 | 356.7 | 139.4% | 352.451 Gbps | 374.9% | 14.931 Gbps | 25.1 ms | unstable |
+| 90% | 90.0% | 93,870 | 9,387 | 2,219,898 | 384.3 | 150.1% | 389.832 Gbps | 461.2% | 15.955 Gbps | 25.7 ms | unstable |
+| 100% | 100.0% | 104,300 | 10,430 | 2,700,304 | 412.9 | 161.3% | 427.213 Gbps | 561.1% | 16.980 Gbps | 26.3 ms | unstable |
 
 Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`. The Qwen3 sensitivity sweep is available in `outputs/agentic_qwen3_sizing_sensitivity.csv`.
 
@@ -286,7 +304,7 @@ The following user-count sensitivity figure fixes the intent ratio at $20\%$ and
 
 ## 1.7 Interpretation
 
-With $128$ configured NPUs assigned to Qwen3 serving and $10\%$ Qwen3 invocation ratio, NPU utilization is $29.8\%$ at $10\%$ intent ratio, $62.1\%$ at $20\%$ intent ratio, and $96.9\%$ at $30\%$ intent ratio. At $40\%$ intent ratio, NPU utilization exceeds $100\%$, so the fixed NPU cluster is overloaded. Higher intent ratios require more NPU capacity, lower Qwen3 invocation ratio, shorter token profiles, faster serving, or admission control.
+With $128$ configured NPUs assigned to Qwen3 serving and $10\%$ Qwen3 invocation ratio, NPU utilization is $29.2\%$ at $10\%$ intent ratio, $60.7\%$ at $20\%$ intent ratio, and $95.8\%$ at $30\%$ intent ratio. At $40\%$ intent ratio, NPU utilization exceeds $100\%$, so the fixed NPU cluster is overloaded. Higher intent ratios require more NPU capacity, lower Qwen3 invocation ratio, shorter token profiles, faster serving, or admission control.
 
 ## 1.8 Model Boundary
 
@@ -294,17 +312,23 @@ The numerical values are analytical input parameters for capacity and sensitivit
 
 ## 1.9 References
 
-1. [Sarathi-Serve: Tackling User-Generated Request Variability in LLM Inference Serving](https://arxiv.org/abs/2403.02310), also published at OSDI 2024 ([PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)).
-   This paper does not define our convex function or $\alpha=0.15$. Its useful evidence is that LLM serving performance depends on request scheduling and batching across prefill and decode phases. It reports that tail latency rises as request rate increases. In this document, that evidence is used to justify nonlinear capacity overhead; queueing delay itself remains outside the primary latency calculation.
+1. [A General Theory of Computational Scalability Based on Rational Functions](https://arxiv.org/abs/0808.1431).
+   This paper defines the Universal Scalability Law as a rational-function capacity model with contention and coherency terms. This document uses USL as the structural basis for the nonlinear overhead multiplier, while keeping the coefficients as analytical sensitivity parameters.
 
-2. [Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180).
+2. [Validity of the Single Processor Approach to Achieving Large Scale Computing Capabilities](https://www.cs.cmu.edu/~18742/papers/Amdahl1967.pdf).
+   This classic paper motivates the general principle that shared serial work limits scalable capacity. It is background support for treating coordination and shared control-plane work as capacity overhead, not as free parallel work.
+
+3. [Sarathi-Serve: Tackling User-Generated Request Variability in LLM Inference Serving](https://arxiv.org/abs/2403.02310), also published at OSDI 2024 ([PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)).
+   This paper shows that LLM serving performance depends on request scheduling and batching across prefill and decode phases. It supports applying a nonlinear capacity-overhead term to Qwen3 serving; queueing delay itself remains outside the primary latency calculation.
+
+4. [Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180).
    This paper explains why KV-cache memory management is central to LLM serving. KV cache is large and dynamic; inefficient memory management reduces batching efficiency and serving throughput. This supports the model term that converts raw Qwen3 token demand into effective token demand under KV/cache pressure.
 
-3. [Online Scheduling for LLM Inference with KV Cache Constraints](https://www.microsoft.com/en-us/research/publication/online-scheduling-for-llm-inference-with-kv-cache-constraints/) and [arXiv:2502.07115](https://arxiv.org/abs/2502.07115).
+5. [Online Scheduling for LLM Inference with KV Cache Constraints](https://www.microsoft.com/en-us/research/publication/online-scheduling-for-llm-inference-with-kv-cache-constraints/) and [arXiv:2502.07115](https://arxiv.org/abs/2502.07115).
    This work treats KV-cache capacity as a scheduling constraint for LLM inference. It supports the view that utilization and memory pressure are coupled under concurrency, so NPU serving demand should not be modeled only as raw tokens divided by peak token capacity.
 
-4. [GPUStack Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/).
+6. [GPUStack Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/).
    This benchmark provides the reference token capacity used in the model: `15,040.15 total tokens/s` for Qwen3-30B-A3B with `128 input tokens` and `4 output tokens`.
 
-5. [vLLM Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/).
+7. [vLLM Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/).
    This documentation provides implementation context for serving Qwen3-family models on Ascend through vLLM Ascend. It supports the tensor-parallel serving assumptions used for the configured NPU cluster.

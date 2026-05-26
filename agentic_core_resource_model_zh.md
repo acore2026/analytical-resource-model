@@ -56,7 +56,7 @@ $$
 | Qwen3 token 能力 | 15,040 tokens/s/replica |
 | Qwen3 张量并行规模 | 4 NPUs/replica |
 | 网络容量 | 100 Gbps |
-| 非线性开销模型 | 平滑凸性开销曲线 |
+| 非线性开销模型 | 基于 USL 的竞争与协调开销曲线 |
 | 非意图 Agent CPU 成本 | 0.3 CPU-ms/request |
 | 意图 Agent CPU 成本 | 2.0 CPU-ms/request |
 | 非意图 Agent 时延 | 1 ms/request |
@@ -146,23 +146,41 @@ $$
 
 携带意图请求额外增加 $12\ \mathrm{KB/request}$ 控制面元数据，用于意图容器、任务元数据、工具调用封装以及 Agent 间状态/追踪元数据。
 
-## 1.5 凸性非线性开销模型
+## 1.5 基于 USL 的非线性开销模型
 
-模型先计算线性需求，再将对应的 CPU、网络或 Qwen3 服务负载输入平滑凸性开销函数。该函数用于表示高并发下有效服务效率下降。
+模型先计算线性需求，再将对应的 CPU、网络或 Qwen3 服务负载输入基于 Universal Scalability Law（USL）的非线性开销函数。USL 是计算机系统中常用的可扩展性模型，它将扩展损失拆分为两类：资源竞争，以及协调/一致性开销。该结构适合本文架构，因为 Agentic 控制面处理会引入共享状态访问、调度、工具封装协调和多副本推理服务开销。
 
-令 $u$ 表示原始线性利用率， $F(u)$ 表示加入竞争开销后的有效利用率：
+经典 USL 吞吐形式如下：
 
 $$
-F(u)=u+\alpha u^2,\quad \alpha=0.15
+C(N)=\frac{N}{1+\alpha(N-1)+\beta N(N-1)}
 $$
 
-其中： $F(u)$ 表示加入非线性开销后的有效利用率； $u$ 表示加入开销前的原始线性利用率； $\alpha$ 表示非线性开销系数； $\alpha=0.15$ 是默认的中等开销假设。
+其中： $C(N)$ 表示 $N$ 个并行 worker 下的相对系统吞吐； $\alpha$ 表示竞争； $\beta$ 表示一致性或协调成本。
 
-系数 $\alpha=0.15$ 是分析型敏感性参数，不是部署实测值，也不应被表述为文献给出的通用常数。本文末尾的参考文献支持在高并发 LLM 服务中引入非线性开销项，主要原因包括调度、批处理、运行时协调和 KV/cache 压力。具体 $\alpha$ 取值应在系统实现后，使用 CPU profiling、NPU 服务吞吐和网络遥测数据进行校准。当前默认值表示中等非线性开销场景，用于敏感性分析。
+本文使用相同思想的归一化需求侧表达：
+
+$$
+M_{\mathrm{USL}}(u)=1+\sigma u+\kappa u^2
+$$
+
+$$
+F_{\mathrm{USL}}(u)=u \cdot M_{\mathrm{USL}}(u)
+$$
+
+其中： $u$ 表示加入非线性开销前的原始线性利用率； $M_{\mathrm{USL}}(u)$ 表示开销倍率； $F_{\mathrm{USL}}(u)$ 表示加入非线性开销后的有效利用率； $\sigma$ 表示竞争系数； $\kappa$ 表示协调/一致性系数。
+
+默认系数如下：
+
+$$
+\sigma=0.05,\quad \kappa=0.10
+$$
+
+这些系数是分析型敏感性参数，不是部署实测值。当 $u=1.0$ 时，开销倍率为 $1.15$ ，表示线性模型中的满载需求在考虑竞争和协调开销后被视为高出 $15\%$ 的有效需求。具体取值应在系统实现后，使用 CPU profiling、NPU 服务吞吐和网络遥测数据进行校准。
 
 ### 1.5.1 为什么会出现非线性开销
 
-非线性函数用于表示高并发下有效服务效率下降，而不是表示单个请求的语义工作量发生变化。每增加一单位负载，系统还会额外消耗竞争、调度、内存搬移和运行时协调等容量。
+非线性函数用于表示高并发下有效服务效率下降，而不是表示单个请求的语义工作量发生变化。每增加一单位负载，系统还会额外消耗竞争、调度、内存搬移、运行时协调和一致性相关容量。
 
 | 资源区域 | 非线性因素 | 模型中的含义 |
 | --- | --- | --- |
@@ -173,9 +191,9 @@ $$
 
 KV/cache 内存压力对 Qwen3 服务尤其重要。在高并发场景下，活跃请求会更长时间占用 key-value cache、运行时缓冲区和调度状态。这会降低新请求可用的有效吞吐能力，即使每个请求的原始 token 配置没有变化。因此，模型并不表示 Qwen3 为单个请求生成了更多语义 token；模型使用有效 token 需求来表示模型服务系统周边的额外开销。
 
-本文的非线性假设是基于上述服务系统效应形成的工程模型。参考文献并没有直接定义 $F(u)=u+\alpha u^2$ ，也没有给出 $\alpha=0.15$ ；它们支持的结论是，纯线性模型可能低估高负载场景下的服务开销。
+本文的非线性假设是基于上述服务系统效应形成的分析模型。USL 提供竞争加协调的通用结构。LLM 服务相关参考文献支持将该类开销项应用到 Qwen3/NPU 服务，因为批处理、调度和 KV/cache 内存压力会在并发场景下降低有效服务效率。
 
-以下小节说明模型如何将凸性开销函数分别应用到 CPU、Qwen3/NPU 和网络利用率。时延随后按不含排队的直接处理时间计算。
+以下小节说明模型如何将 $F_{\mathrm{USL}}(\cdot)$ 分别应用到 CPU、Qwen3/NPU 和网络利用率。时延随后按不含排队的直接处理时间计算。
 
 ### 1.5.2 CPU 利用率
 
@@ -187,13 +205,13 @@ $$
 
 其中： $C_{\mathrm{cpu,linear}}$ 表示加入非线性开销前的平均 CPU 成本； $\lambda_i/\lambda_{\mathrm{total}}$ 表示事件 $i$ 的流量占比； $C_{\mathrm{base},i}$ 表示事件 $i$ 的确定性核心网 CPU 成本； $s_I$ 表示总意图占比； $C_{\mathrm{agent,intent}}$ 表示意图 Agent CPU 成本； $C_{\mathrm{agent,nonintent}}$ 表示非意图 Agent CPU 成本。
 
-然后，将原始 CPU 利用率输入凸性函数 $F(\cdot)$ ，用于表示高负载下的调度、竞争和内存压力开销。
+然后，将原始 CPU 利用率输入 $F_{\mathrm{USL}}(\cdot)$ ，用于表示高负载下的调度、竞争和内存压力开销。
 
 $$
-u_{\mathrm{cpu}} = F(u_{\mathrm{cpu,linear}})
+u_{\mathrm{cpu}} = F_{\mathrm{USL}}(u_{\mathrm{cpu,linear}})
 $$
 
-其中： $u_{\mathrm{cpu}}$ 表示加入非线性开销后的有效 CPU 利用率； $u_{\mathrm{cpu,linear}}$ 表示加入开销前的原始 CPU 利用率； $F(\cdot)$ 表示凸性开销函数。
+其中： $u_{\mathrm{cpu}}$ 表示加入非线性开销后的有效 CPU 利用率； $u_{\mathrm{cpu,linear}}$ 表示加入开销前的原始 CPU 利用率； $F_{\mathrm{USL}}(\cdot)$ 表示基于 USL 的开销函数。
 
 有效 CPU 需求由 CPU 容量乘以有效 CPU 利用率得到。
 
@@ -213,13 +231,13 @@ $$
 
 其中： $u_{Q,\mathrm{linear}}$ 表示加入非线性开销前的原始 Qwen3/NPU 利用率； $T_Q$ 表示原始 Qwen3 token 需求； $C_Q$ 表示配置的 Qwen3 token 能力。
 
-原始 NPU 利用率同样输入 $F(\cdot)$ ，用于表示批处理效率下降、运行时调度和 KV/cache 内存压力。
+原始 NPU 利用率同样输入 $F_{\mathrm{USL}}(\cdot)$ ，用于表示批处理效率下降、运行时调度和 KV/cache 内存压力。
 
 $$
-u_Q = F(u_{Q,\mathrm{linear}})
+u_Q = F_{\mathrm{USL}}(u_{Q,\mathrm{linear}})
 $$
 
-其中： $u_Q$ 表示加入非线性开销后的有效 Qwen3/NPU 利用率； $u_{Q,\mathrm{linear}}$ 表示原始 Qwen3/NPU 利用率； $F(\cdot)$ 表示凸性开销函数。
+其中： $u_Q$ 表示加入非线性开销后的有效 Qwen3/NPU 利用率； $u_{Q,\mathrm{linear}}$ 表示原始 Qwen3/NPU 利用率； $F_{\mathrm{USL}}(\cdot)$ 表示基于 USL 的开销函数。
 
 有效 Qwen3 token 需求表示：在考虑非线性开销后，会产生相同有效 NPU 利用率的 token 需求。
 
@@ -234,10 +252,10 @@ $$
 网络利用率包含基础控制面消息流量，以及意图元数据、工具调用封装和 Agent 间协作消息带来的额外流量。网络利用率也使用相同的非线性修正，使缓冲、拥塞控制和协调开销反映到有效带宽负载中。
 
 $$
-u_{\mathrm{net}} = F(u_{\mathrm{net,linear}})
+u_{\mathrm{net}} = F_{\mathrm{USL}}(u_{\mathrm{net,linear}})
 $$
 
-其中： $u_{\mathrm{net}}$ 表示加入非线性开销后的有效网络利用率； $u_{\mathrm{net,linear}}$ 表示加入开销前的原始网络利用率； $F(\cdot)$ 表示凸性开销函数。
+其中： $u_{\mathrm{net}}$ 表示加入非线性开销后的有效网络利用率； $u_{\mathrm{net,linear}}$ 表示加入开销前的原始网络利用率； $F_{\mathrm{USL}}(\cdot)$ 表示基于 USL 的开销函数。
 
 ### 1.5.5 不含排队的时延
 
@@ -259,21 +277,21 @@ $$
 
 ## 1.6 分析结果
 
-下表固定用户规模、事件频率和 Qwen3 集群规模，仅以固定 $10\%$ 步长改变全部请求中携带意图的比例。可见资源利用率结果使用凸性非线性开销模型。时延列是不含排队的处理时间估算。意图比例扫描图使用 $1\%$ 采样展示细节。
+下表固定用户规模、事件频率和 Qwen3 集群规模，仅以固定 $10\%$ 步长改变全部请求中携带意图的比例。可见资源利用率结果使用基于 USL 的非线性开销模型。时延列是不含排队的处理时间估算。意图比例扫描图使用 $1\%$ 采样展示细节。
 
 | 意图比例 | 总意图占比 | 意图 rps | Qwen3 rps | 有效 Qwen3 tokens/s | CPU 核 | CPU 利用率 | 内存流量 | NPU 利用率 | 网络带宽 | 平均时延 | 状态 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 0% | 0.0% | 0 | 0 | 0 | 171.2 | 66.9% | 53.402 Gbps | 0.0% | 6.848 Gbps | 20.5 ms | 稳定 |
-| 10% | 10.0% | 10,430 | 1,043 | 143,584 | 192.4 | 75.2% | 90.783 Gbps | 29.8% | 7.871 Gbps | 21.1 ms | 退化 |
-| 20% | 20.0% | 20,860 | 2,086 | 298,982 | 213.9 | 83.6% | 128.164 Gbps | 62.1% | 8.897 Gbps | 21.6 ms | 退化 |
-| 30% | 30.0% | 31,290 | 3,129 | 466,196 | 235.9 | 92.1% | 165.545 Gbps | 96.9% | 9.927 Gbps | 22.2 ms | 高风险 |
-| 40% | 40.0% | 41,720 | 4,172 | 645,225 | 258.1 | 100.8% | 202.926 Gbps | 134.1% | 10.959 Gbps | 22.8 ms | 不稳定 |
-| 50% | 50.0% | 52,150 | 5,215 | 836,070 | 280.8 | 109.7% | 240.307 Gbps | 173.7% | 11.994 Gbps | 23.4 ms | 不稳定 |
-| 60% | 60.0% | 62,580 | 6,258 | 1,038,729 | 303.8 | 118.7% | 277.688 Gbps | 215.8% | 13.032 Gbps | 24.0 ms | 不稳定 |
-| 70% | 70.0% | 73,010 | 7,301 | 1,253,204 | 327.2 | 127.8% | 315.069 Gbps | 260.4% | 14.073 Gbps | 24.5 ms | 不稳定 |
-| 80% | 80.0% | 83,440 | 8,344 | 1,479,493 | 350.9 | 137.1% | 352.451 Gbps | 307.4% | 15.118 Gbps | 25.1 ms | 不稳定 |
-| 90% | 90.0% | 93,870 | 9,387 | 1,717,598 | 375.1 | 146.5% | 389.832 Gbps | 356.9% | 16.165 Gbps | 25.7 ms | 不稳定 |
-| 100% | 100.0% | 104,300 | 10,430 | 1,967,518 | 399.5 | 156.1% | 427.213 Gbps | 408.8% | 17.215 Gbps | 26.3 ms | 不稳定 |
+| 0% | 0.0% | 0 | 0 | 0 | 167.5 | 65.4% | 53.402 Gbps | 0.0% | 6.805 Gbps | 20.5 ms | 稳定 |
+| 10% | 10.0% | 10,430 | 1,043 | 140,772 | 188.6 | 73.7% | 90.783 Gbps | 29.2% | 7.815 Gbps | 21.1 ms | 退化 |
+| 20% | 20.0% | 20,860 | 2,086 | 292,242 | 210.4 | 82.2% | 128.164 Gbps | 60.7% | 8.827 Gbps | 21.6 ms | 退化 |
+| 30% | 30.0% | 31,290 | 3,129 | 461,170 | 232.8 | 90.9% | 165.545 Gbps | 95.8% | 9.840 Gbps | 22.2 ms | 高风险 |
+| 40% | 40.0% | 41,720 | 4,172 | 654,315 | 255.9 | 100.0% | 202.926 Gbps | 136.0% | 10.855 Gbps | 22.8 ms | 不稳定 |
+| 50% | 50.0% | 52,150 | 5,215 | 878,438 | 279.8 | 109.3% | 240.307 Gbps | 182.5% | 11.871 Gbps | 23.4 ms | 不稳定 |
+| 60% | 60.0% | 62,580 | 6,258 | 1,140,298 | 304.6 | 119.0% | 277.688 Gbps | 236.9% | 12.890 Gbps | 24.0 ms | 不稳定 |
+| 70% | 70.0% | 73,010 | 7,301 | 1,446,655 | 330.2 | 129.0% | 315.069 Gbps | 300.6% | 13.909 Gbps | 24.5 ms | 不稳定 |
+| 80% | 80.0% | 83,440 | 8,344 | 1,804,268 | 356.7 | 139.4% | 352.451 Gbps | 374.9% | 14.931 Gbps | 25.1 ms | 不稳定 |
+| 90% | 90.0% | 93,870 | 9,387 | 2,219,898 | 384.3 | 150.1% | 389.832 Gbps | 461.2% | 15.955 Gbps | 25.7 ms | 不稳定 |
+| 100% | 100.0% | 104,300 | 10,430 | 2,700,304 | 412.9 | 161.3% | 427.213 Gbps | 561.1% | 16.980 Gbps | 26.3 ms | 不稳定 |
 
 生成结果位于 `outputs/agentic_resource_results.csv`。用户规模敏感性扫描位于 `outputs/agentic_resource_sensitivity.csv`。Qwen3 敏感性扫描位于 `outputs/agentic_qwen3_sizing_sensitivity.csv`。
 
@@ -286,7 +304,7 @@ $$
 
 ## 1.7 结果解读
 
-在配置 $128$ 张 NPU 用于 Qwen3 服务且 Qwen3 调用比例为 $10\%$ 的情况下，NPU 利用率在 $10\%$ 意图比例时为 $29.8\%$ ，在 $20\%$ 意图比例时为 $62.1\%$ ，在 $30\%$ 意图比例时为 $96.9\%$ 。当意图比例达到 $40\%$ 时，NPU 利用率超过 $100\%$ ，表示固定 NPU 集群已经过载。更高意图比例需要增加 NPU 容量、降低 Qwen3 调用比例、缩短 token 配置、提升服务吞吐或引入准入控制。
+在配置 $128$ 张 NPU 用于 Qwen3 服务且 Qwen3 调用比例为 $10\%$ 的情况下，NPU 利用率在 $10\%$ 意图比例时为 $29.2\%$ ，在 $20\%$ 意图比例时为 $60.7\%$ ，在 $30\%$ 意图比例时为 $95.8\%$ 。当意图比例达到 $40\%$ 时，NPU 利用率超过 $100\%$ ，表示固定 NPU 集群已经过载。更高意图比例需要增加 NPU 容量、降低 Qwen3 调用比例、缩短 token 配置、提升服务吞吐或引入准入控制。
 
 ## 1.8 模型边界
 
@@ -294,17 +312,23 @@ $$
 
 ## 1.9 参考文献
 
-1. [Sarathi-Serve: Tackling User-Generated Request Variability in LLM Inference Serving](https://arxiv.org/abs/2403.02310)，OSDI 2024 版本见 [PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)。
-   该论文没有定义本文使用的凸性函数，也没有给出 $\alpha=0.15$ 。它对本文有用的证据是：LLM 服务性能受 prefill 和 decode 阶段之间的调度与批处理影响，并且论文结果显示请求速率升高时尾时延会上升。本文使用该证据支撑非线性容量开销；排队时延本身不属于主时延计算。
+1. [A General Theory of Computational Scalability Based on Rational Functions](https://arxiv.org/abs/0808.1431)。
+   该论文定义 Universal Scalability Law，将系统容量建模为包含竞争项和一致性项的有理函数。本文使用 USL 作为非线性开销倍率的结构依据，但系数仍作为分析型敏感性参数。
 
-2. [Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)。
+2. [Validity of the Single Processor Approach to Achieving Large Scale Computing Capabilities](https://www.cs.cmu.edu/~18742/papers/Amdahl1967.pdf)。
+   该经典论文说明共享串行工作会限制可扩展容量。本文将其作为背景依据，用于说明协调和共享控制面工作不应被视为免费的并行能力。
+
+3. [Sarathi-Serve: Tackling User-Generated Request Variability in LLM Inference Serving](https://arxiv.org/abs/2403.02310)，OSDI 2024 版本见 [PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)。
+   该论文说明 LLM 服务性能受 prefill 和 decode 阶段之间的调度与批处理影响。本文使用该证据支撑对 Qwen3 服务应用非线性容量开销项；排队时延本身不属于主时延计算。
+
+4. [Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)。
    该论文说明 KV-cache 内存管理是 LLM 服务的关键问题。KV cache 规模大且动态变化；低效内存管理会降低批处理效率和服务吞吐。因此，本文将原始 Qwen3 token 需求转换为考虑 KV/cache 压力后的有效 token 需求。
 
-3. [Online Scheduling for LLM Inference with KV Cache Constraints](https://www.microsoft.com/en-us/research/publication/online-scheduling-for-llm-inference-with-kv-cache-constraints/) 和 [arXiv:2502.07115](https://arxiv.org/abs/2502.07115)。
+5. [Online Scheduling for LLM Inference with KV Cache Constraints](https://www.microsoft.com/en-us/research/publication/online-scheduling-for-llm-inference-with-kv-cache-constraints/) 和 [arXiv:2502.07115](https://arxiv.org/abs/2502.07115)。
    该工作将 KV-cache 容量作为 LLM 推理调度约束，说明并发场景下利用率和内存压力是耦合的。因此，NPU 服务需求不应只用原始 tokens 除以峰值 token 能力来表示。
 
-4. [GPUStack Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/)。
+6. [GPUStack Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/)。
    该基准提供本文使用的参考 token 能力：Qwen3-30B-A3B 在 `128 input tokens` 和 `4 output tokens` 配置下达到 `15,040.15 total tokens/s`。
 
-5. [vLLM Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/)。
+7. [vLLM Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/)。
    该文档提供在 Ascend 上通过 vLLM Ascend 服务 Qwen3 系列模型的实现背景，支撑本文对配置 NPU 集群和张量并行服务的假设。
