@@ -127,7 +127,7 @@
             <small>vLLM Ascend 0.11.0 · Qwen3-30B-A3B</small>
           </div>
           <p class="source-note">
-            <span data-i18n="qwen3SourceNote">Source: GPUStack reports 15,040 total tokens/s for Qwen3-30B-A3B short-prompt serving on Ascend 910B; vLLM-Ascend recommends TP >= 4 for 32 GB NPU cards.</span>
+            <span data-i18n="qwen3SourceNote">Source: GPUStack reports 15,591.71 total tokens/s for Qwen3-30B-A3B medium-prompt serving on Ascend 910B, with Mean TPOT 194.54 ms; vLLM-Ascend recommends TP >= 4 for 32 GB NPU cards.</span>
             <a href="https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/" data-i18n="sourceLink">GPUStack benchmark</a>
             <a href="https://docs.vllm.ai/projects/ascend/en/v0.18.0/" data-i18n="vllmSourceLink">vLLM-Ascend docs</a>
           </p>
@@ -158,16 +158,16 @@
               <input id="qwen3InvocationRatio" type="number" min="0" max="100" step="1" value="10">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="qwen3InputTokens">Qwen3 input tokens</span> <span class="unit">(tokens/request)</span><span class="help" data-tip-key="qwen3InputTokensTip" data-tip="Input tokens per complex intent request. The benchmark-derived default is 128.">?</span></span>
-              <input id="qwen3InputTokens" type="number" min="1" step="1" value="128">
+              <span class="label-line"><span data-i18n="qwen3InputTokens">Qwen3 input tokens</span> <span class="unit">(tokens/request)</span><span class="help" data-tip-key="qwen3InputTokensTip" data-tip="Input tokens per complex intent request. The benchmark-derived Medium Prompt default is 2000.">?</span></span>
+              <input id="qwen3InputTokens" type="number" min="1" step="1" value="2000">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="qwen3OutputTokens">Qwen3 output tokens</span> <span class="unit">(tokens/request)</span><span class="help" data-tip-key="qwen3OutputTokensTip" data-tip="Output tokens per complex intent request. The benchmark-derived default is 4.">?</span></span>
-              <input id="qwen3OutputTokens" type="number" min="1" step="1" value="4">
+              <span class="label-line"><span data-i18n="qwen3OutputTokens">Qwen3 output tokens</span> <span class="unit">(tokens/request)</span><span class="help" data-tip-key="qwen3OutputTokensTip" data-tip="Output tokens per complex intent request. The benchmark-derived Medium Prompt default is 100.">?</span></span>
+              <input id="qwen3OutputTokens" type="number" min="1" step="1" value="100">
             </label>
             <label class="field compact">
-              <span class="label-line"><span data-i18n="qwen3TokenCapacity">Qwen3 capacity</span> <span class="unit">(tokens/s/replica)</span><span class="help" data-tip-key="qwen3TokenCapacityTip" data-tip="Reference Qwen3 serving capacity. GPUStack reports 15,040 total tokens/s for the optimized short-prompt Ascend 910B benchmark.">?</span></span>
-              <input id="qwen3TokenCapacity" type="number" min="1" step="100" value="15040">
+              <span class="label-line"><span data-i18n="qwen3TokenCapacity">Qwen3 capacity</span> <span class="unit">(tokens/s/replica)</span><span class="help" data-tip-key="qwen3TokenCapacityTip" data-tip="Reference Qwen3 serving capacity. GPUStack reports 15,591.71 total tokens/s for the optimized Medium Prompt Ascend 910B benchmark.">?</span></span>
+              <input id="qwen3TokenCapacity" type="number" min="1" step="0.01" value="15591.71">
             </label>
             <label class="field compact">
               <span class="label-line"><span data-i18n="qwen3TensorParallel">Qwen3 tensor parallel</span> <span class="unit">(NPUs/replica)</span><span class="help" data-tip-key="qwen3TensorParallelTip" data-tip="NPUs required for one Qwen3 replica. vLLM-Ascend recommends TP >= 4 for 32 GB NPU cards.">?</span></span>

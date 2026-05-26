@@ -54,8 +54,8 @@ The baseline uses $N_{\mathrm{user}}=3.6\times10^6$ users and $2$ PDU sessions/u
 | Intent inference model                   |                                           Qwen3-30B-A3B |
 | Configured NPU cluster for Qwen3 serving |                                                128 NPUs |
 | Qwen3 invocation ratio                   |                                  10% of intent requests |
-| Qwen3 token profile                      | 128 input tokens + 4 output tokens = 132 tokens/request |
-| Qwen3 token capacity                     |                                 15,040 tokens/s/replica |
+| Qwen3 token profile                      | 2,000 input tokens + 100 output tokens = 2,100 tokens/request |
+| Qwen3 token capacity                     |                              15,591.71 tokens/s/replica |
 | Qwen3 tensor parallel size               |                                          4 NPUs/replica |
 | Network capacity                         |                                                100 Gbps |
 | Nonlinear overhead model                 |          USL-inspired contention and coordination curve |
@@ -67,7 +67,7 @@ $CPU\text{-}ms$ means one CPU core occupied for one millisecond. For example, $2
 
 ## 1.3 Qwen3 Capacity Reference
 
-[GPUStack's Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/) reports `15,040.15 total tokens/s` for `128 input tokens` and `4 output tokens`. The [vLLM-Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/) includes Qwen3-30B-A3B guidance; for 32 GB NPU cards, the model uses tensor parallel size $TP_Q=4$.
+[GPUStack's Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/) reports `15,591.71 total tokens/s` for the optimized Medium Prompt case with `2,000 input tokens` and `100 output tokens`. The same benchmark reports `Mean TPOT = 194.54 ms`; this value is cited as benchmark context only and is not used in the model formulas because this document estimates resource capacity. The [vLLM-Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/) includes Qwen3-30B-A3B guidance; for 32 GB NPU cards, the model uses tensor parallel size $TP_Q=4$.
 
 The intent request rate is the total request rate multiplied by the intent ratio.
 
@@ -280,17 +280,17 @@ The table fixes the user population, event frequencies, and Qwen3 cluster size, 
 
 | Intent ratio | Total intent share | Intent rps | Qwen3 rps | Effective Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | NPU util | Network bandwidth | Status    |
 | -----------: | -----------------: | ---------: | --------: | -----------------------: | --------: | -------: | -------------: | -------: | ----------------: | --------- |
-|           0% |               0.0% |          0 |         0 |                        0 |     167.5 |    65.4% |    53.402 Gbps |     0.0% |        6.805 Gbps | stable    |
-|          10% |              10.0% |     10,430 |     1,043 |                  140,772 |     188.6 |    73.7% |    90.783 Gbps |    29.2% |        7.815 Gbps | degraded  |
-|          20% |              20.0% |     20,860 |     2,086 |                  292,242 |     210.4 |    82.2% |   128.164 Gbps |    60.7% |        8.827 Gbps | degraded  |
-|          30% |              30.0% |     31,290 |     3,129 |                  461,170 |     232.8 |    90.9% |   165.545 Gbps |    95.8% |        9.840 Gbps | high_risk |
-|          40% |              40.0% |     41,720 |     4,172 |                  654,315 |     255.9 |   100.0% |   202.926 Gbps |   136.0% |       10.855 Gbps | unstable  |
-|          50% |              50.0% |     52,150 |     5,215 |                  878,438 |     279.8 |   109.3% |   240.307 Gbps |   182.5% |       11.871 Gbps | unstable  |
-|          60% |              60.0% |     62,580 |     6,258 |                1,140,298 |     304.6 |   119.0% |   277.688 Gbps |   236.9% |       12.890 Gbps | unstable  |
-|          70% |              70.0% |     73,010 |     7,301 |                1,446,655 |     330.2 |   129.0% |   315.069 Gbps |   300.6% |       13.909 Gbps | unstable  |
-|          80% |              80.0% |     83,440 |     8,344 |                1,804,268 |     356.7 |   139.4% |   352.451 Gbps |   374.9% |       14.931 Gbps | unstable  |
-|          90% |              90.0% |     93,870 |     9,387 |                2,219,898 |     384.3 |   150.1% |   389.832 Gbps |   461.2% |       15.955 Gbps | unstable  |
-|         100% |             100.0% |    104,300 |    10,430 |                2,700,304 |     412.9 |   161.3% |   427.213 Gbps |   561.1% |       16.980 Gbps | unstable  |
+|           0% |               0.0% |          0 |         0 |                        0 |     167.5 |    65.4% |    53.402 Gbps |      0.0% |        6.805 Gbps | stable    |
+|          10% |              10.0% |     10,430 |     1,043 |                6,892,144 |     188.6 |    73.7% |    90.783 Gbps |  1,381.4% |        7.815 Gbps | unstable  |
+|          20% |              20.0% |     20,860 |     2,086 |               40,072,285 |     210.4 |    82.2% |   128.164 Gbps |  8,031.6% |        8.827 Gbps | unstable  |
+|          30% |              30.0% |     31,290 |     3,129 |              124,866,892 |     232.8 |    90.9% |   165.545 Gbps | 25,026.7% |        9.840 Gbps | unstable  |
+|          40% |              40.0% |     41,720 |     4,172 |              286,602,430 |     255.9 |   100.0% |   202.926 Gbps | 57,442.9% |       10.855 Gbps | unstable  |
+|          50% |              50.0% |     52,150 |     5,215 |              550,605,367 |     279.8 |   109.3% |   240.307 Gbps | 110,356.2% |       11.871 Gbps | unstable  |
+|          60% |              60.0% |     62,580 |     6,258 |              942,202,168 |     304.6 |   119.0% |   277.688 Gbps | 188,842.8% |       12.890 Gbps | unstable  |
+|          70% |              70.0% |     73,010 |     7,301 |            1,486,719,302 |     330.2 |   129.0% |   315.069 Gbps | 297,978.7% |       13.909 Gbps | unstable  |
+|          80% |              80.0% |     83,440 |     8,344 |            2,209,483,234 |     356.7 |   139.4% |   352.451 Gbps | 442,840.1% |       14.931 Gbps | unstable  |
+|          90% |              90.0% |     93,870 |     9,387 |            3,135,820,432 |     384.3 |   150.1% |   389.832 Gbps | 628,503.2% |       15.955 Gbps | unstable  |
+|         100% |             100.0% |    104,300 |    10,430 |            4,291,057,362 |     412.9 |   161.3% |   427.213 Gbps | 860,043.8% |       16.980 Gbps | unstable  |
 
 Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`. The Qwen3 sensitivity sweep is available in `outputs/agentic_qwen3_sizing_sensitivity.csv`.
 
@@ -302,7 +302,7 @@ The following user-count sensitivity figure fixes the intent ratio at $20\%$ and
 
 ## 1.7 Interpretation
 
-With $128$ configured NPUs assigned to Qwen3 serving and $10\%$ Qwen3 invocation ratio, NPU utilization is $29.2\%$ at $10\%$ intent ratio, $60.7\%$ at $20\%$ intent ratio, and $95.8\%$ at $30\%$ intent ratio. At $40\%$ intent ratio, NPU utilization exceeds $100\%$, so the fixed NPU cluster is overloaded. Higher intent ratios require more NPU capacity, lower Qwen3 invocation ratio, shorter token profiles, faster serving, or admission control.
+With $128$ configured NPUs assigned to Qwen3 serving and $10\%$ Qwen3 invocation ratio, the Medium Prompt token profile is a conservative stress case. NPU utilization is already $1,381.4\%$ at $10\%$ intent ratio and $8,031.6\%$ at $20\%$ intent ratio, so the fixed NPU cluster is overloaded whenever a meaningful share of intent traffic invokes Qwen3 with this prompt size. Stable operation under this workload requires more NPU capacity, lower Qwen3 invocation ratio, shorter token profiles, faster serving, admission control, or routing most intent requests to lightweight non-LLM handling.
 
 ## 1.8 Model Boundary
 
@@ -321,6 +321,6 @@ The numerical values are analytical input parameters for capacity and sensitivit
 5. [Online Scheduling for LLM Inference with KV Cache Constraints](https://www.microsoft.com/en-us/research/publication/online-scheduling-for-llm-inference-with-kv-cache-constraints/) and [arXiv:2502.07115](https://arxiv.org/abs/2502.07115).
    This work treats KV-cache capacity as a scheduling constraint for LLM inference. It supports the view that utilization and memory pressure are coupled under concurrency, so NPU serving demand should not be modeled only as raw tokens divided by peak token capacity.
 6. [GPUStack Qwen3-30B-A3B on Ascend 910B benchmark](https://docs.gpustack.ai/2.0/performance-lab/qwen3-30b-a3b/910b/).
-   This benchmark provides the reference token capacity used in the model: `15,040.15 total tokens/s` for Qwen3-30B-A3B with `128 input tokens` and `4 output tokens`.
+   This benchmark provides the reference token capacity used in the model: the optimized Medium Prompt case reports `15,591.71 total tokens/s` and `Mean TPOT = 194.54 ms` for Qwen3-30B-A3B with `2,000 input tokens` and `100 output tokens`. The TPOT value is cited as benchmark context only and does not enter the resource formulas.
 7. [vLLM Ascend documentation](https://docs.vllm.ai/projects/ascend/en/v0.18.0/).
    This documentation provides implementation context for serving Qwen3-family models on Ascend through vLLM Ascend. It supports the tensor-parallel serving assumptions used for the configured NPU cluster.
