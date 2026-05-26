@@ -298,10 +298,6 @@ function applyTranslations() {
     docLink.href = currentLang === "zh"
         ? "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_resource_model_zh.md"
         : "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_resource_model.md";
-    const easyDocLink = mustGet("easyDocLink");
-    easyDocLink.href = currentLang === "zh"
-        ? "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_easy_explanation_zh.md"
-        : "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_easy_explanation.md";
     mustGet("sweepChart").setAttribute("aria-label", t("intentSweepAria"));
     mustGet("userCountChart").setAttribute("aria-label", t("userCountSweepAria"));
 }

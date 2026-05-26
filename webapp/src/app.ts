@@ -331,10 +331,6 @@ function applyTranslations(): void {
   docLink.href = currentLang === "zh"
     ? "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_resource_model_zh.md"
     : "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_resource_model.md";
-  const easyDocLink = mustGet<HTMLAnchorElement>("easyDocLink");
-  easyDocLink.href = currentLang === "zh"
-    ? "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_easy_explanation_zh.md"
-    : "https://github.com/acore2026/analytical-resource-model/blob/main/agentic_core_easy_explanation.md";
   mustGet<HTMLCanvasElement>("sweepChart").setAttribute("aria-label", t("intentSweepAria"));
   mustGet<HTMLCanvasElement>("userCountChart").setAttribute("aria-label", t("userCountSweepAria"));
 }

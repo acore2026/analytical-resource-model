@@ -2,7 +2,6 @@ import type { Lang } from "./types.js";
 
 export const I18N: Record<Lang, Record<string, string>> = {
   en: {
-    easyExplanation: "Easy explanation",
     modelMarkdown: "Model markdown",
     open: "OPEN",
     userModel: "User Model",
@@ -117,7 +116,6 @@ export const I18N: Record<Lang, Record<string, string>> = {
     effectiveTokens: "effective tokens/s"
   },
   zh: {
-    easyExplanation: "简明说明",
     modelMarkdown: "模型说明文档",
     open: "打开",
     userModel: "用户模型",

@@ -121,18 +121,6 @@ h2 {
   box-shadow: 0 18px 40px rgba(49, 58, 48, 0.22);
 }
 
-.quiet-doc-link {
-  color: var(--quiet);
-  font-size: 12px;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.quiet-doc-link:hover {
-  color: var(--muted);
-  text-decoration: underline;
-}
-
 .lang-toggle {
   min-height: 44px;
   border: 1px solid var(--line);
