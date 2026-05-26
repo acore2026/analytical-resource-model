@@ -15,7 +15,7 @@ export const BASELINE: Baseline = {
   qwen3TokenCapacity: 15040,
   qwen3TensorParallel: 4,
   nonIntentCpu: 0.3,
-  intentCpu: 2.0,
+  intentCpu: 0.7,
   intentBandwidthKb: 12
 };
 

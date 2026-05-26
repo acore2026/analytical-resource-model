@@ -31,7 +31,7 @@ class ModelConfig:
     fixed_model_hbm_gb: float = 16.0
     non_intent_agent_cpu_ms: float = 0.3
     non_intent_mem_traffic_kb: float = 64.0
-    intent_agent_cpu_ms: float = 2.0
+    intent_agent_cpu_ms: float = 0.7
     intent_agent_bandwidth_kb: float = 12.0
     intent_mem_traffic_kb: float = 512.0
     qwen3_invocation_ratio: float = 0.10

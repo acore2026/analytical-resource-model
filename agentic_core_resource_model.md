@@ -60,7 +60,7 @@ The baseline uses $N_{\mathrm{user}}=3.6\times10^6$ users and $2$ PDU sessions/u
 | Network capacity                         |                                                100 Gbps |
 | Nonlinear overhead model                 |          USL-inspired contention and coordination curve |
 | Non-intent agent CPU cost                |                                      0.3 CPU-ms/request |
-| Intent agent CPU cost                    |                                      2.0 CPU-ms/request |
+| Intent agent CPU cost                    |                                      0.7 CPU-ms/request |
 | Intent extra bandwidth                   |                                           12 KB/request |
 
 $CPU\text{-}ms$ means one CPU core occupied for one millisecond. For example, $2\ CPU\text{-}ms/request$ at $100,000$ requests/s consumes $200$ CPU cores.
@@ -113,7 +113,7 @@ Where: $C_Q$ is total Qwen3 serving capacity in tokens/s; $R_{Q,\mathrm{avail}}$
 
 ## 1.4 Agentic Cost Model
 
-For non-intent requests, incremental agentic CPU cost is $0.30\ CPU\text{-}ms/request$. For intent-bearing requests, CPU-side agent work is $2.00\ CPU\text{-}ms/request$, excluding Qwen3 inference.
+For non-intent requests, incremental agentic CPU cost is $0.30\ CPU\text{-}ms/request$. For intent-bearing requests, CPU-side agent work is $0.70\ CPU\text{-}ms/request$, excluding Qwen3 inference.
 
 In this context, "incremental" means additional CPU work introduced by the NW-Agent layer, beyond the deterministic CPU cost of the normal core-network procedure. The proposal states that NW-Agents handle requests with or without intent, and that legacy NAS messages without intent can still be routed to corresponding agents. Therefore, a non-intent request still has lightweight agent-side processing even though it does not require intent understanding, complex task planning, or Qwen3 inference.
 
@@ -281,16 +281,16 @@ The table fixes the user population, event frequencies, and Qwen3 cluster size, 
 | Intent ratio | Total intent share | Intent rps | Qwen3 rps | Effective Qwen3 tokens/s | CPU cores | CPU util | Memory traffic | NPU util | Network bandwidth | Status    |
 | -----------: | -----------------: | ---------: | --------: | -----------------------: | --------: | -------: | -------------: | -------: | ----------------: | --------- |
 |           0% |               0.0% |          0 |         0 |                        0 |     167.5 |    65.4% |    53.402 Gbps |     0.0% |        6.805 Gbps | stable    |
-|          10% |              10.0% |     10,430 |     1,043 |                  140,772 |     188.6 |    73.7% |    90.783 Gbps |    29.2% |        7.815 Gbps | degraded  |
-|          20% |              20.0% |     20,860 |     2,086 |                  292,242 |     210.4 |    82.2% |   128.164 Gbps |    60.7% |        8.827 Gbps | degraded  |
-|          30% |              30.0% |     31,290 |     3,129 |                  461,170 |     232.8 |    90.9% |   165.545 Gbps |    95.8% |        9.840 Gbps | high_risk |
-|          40% |              40.0% |     41,720 |     4,172 |                  654,315 |     255.9 |   100.0% |   202.926 Gbps |   136.0% |       10.855 Gbps | unstable  |
-|          50% |              50.0% |     52,150 |     5,215 |                  878,438 |     279.8 |   109.3% |   240.307 Gbps |   182.5% |       11.871 Gbps | unstable  |
-|          60% |              60.0% |     62,580 |     6,258 |                1,140,298 |     304.6 |   119.0% |   277.688 Gbps |   236.9% |       12.890 Gbps | unstable  |
-|          70% |              70.0% |     73,010 |     7,301 |                1,446,655 |     330.2 |   129.0% |   315.069 Gbps |   300.6% |       13.909 Gbps | unstable  |
-|          80% |              80.0% |     83,440 |     8,344 |                1,804,268 |     356.7 |   139.4% |   352.451 Gbps |   374.9% |       14.931 Gbps | unstable  |
-|          90% |              90.0% |     93,870 |     9,387 |                2,219,898 |     384.3 |   150.1% |   389.832 Gbps |   461.2% |       15.955 Gbps | unstable  |
-|         100% |             100.0% |    104,300 |    10,430 |                2,700,304 |     412.9 |   161.3% |   427.213 Gbps |   561.1% |       16.980 Gbps | unstable  |
+|          10% |              10.0% |     10,430 |     1,043 |                  140,772 |     172.4 |    67.4% |    90.783 Gbps |    29.2% |        7.815 Gbps | stable    |
+|          20% |              20.0% |     20,860 |     2,086 |                  292,242 |     177.4 |    69.3% |   128.164 Gbps |    60.7% |        8.827 Gbps | stable    |
+|          30% |              30.0% |     31,290 |     3,129 |                  461,170 |     182.3 |    71.2% |   165.545 Gbps |    95.8% |        9.840 Gbps | high_risk |
+|          40% |              40.0% |     41,720 |     4,172 |                  654,315 |     187.4 |    73.2% |   202.926 Gbps |   136.0% |       10.855 Gbps | unstable  |
+|          50% |              50.0% |     52,150 |     5,215 |                  878,438 |     192.4 |    75.2% |   240.307 Gbps |   182.5% |       11.871 Gbps | unstable  |
+|          60% |              60.0% |     62,580 |     6,258 |                1,140,298 |     197.5 |    77.1% |   277.688 Gbps |   236.9% |       12.890 Gbps | unstable  |
+|          70% |              70.0% |     73,010 |     7,301 |                1,446,655 |     202.6 |    79.1% |   315.069 Gbps |   300.6% |       13.909 Gbps | unstable  |
+|          80% |              80.0% |     83,440 |     8,344 |                1,804,268 |     207.8 |    81.2% |   352.451 Gbps |   374.9% |       14.931 Gbps | unstable  |
+|          90% |              90.0% |     93,870 |     9,387 |                2,219,898 |     213.0 |    83.2% |   389.832 Gbps |   461.2% |       15.955 Gbps | unstable  |
+|         100% |             100.0% |    104,300 |    10,430 |                2,700,304 |     218.2 |    85.2% |   427.213 Gbps |   561.1% |       16.980 Gbps | unstable  |
 
 Generated results are available in `outputs/agentic_resource_results.csv`. The user-count sensitivity sweep is available in `outputs/agentic_resource_sensitivity.csv`. The Qwen3 sensitivity sweep is available in `outputs/agentic_qwen3_sizing_sensitivity.csv`.
 
@@ -303,6 +303,8 @@ The following user-count sensitivity figure fixes the intent ratio at $20\%$ and
 ## 1.7 Interpretation
 
 With $128$ configured NPUs assigned to Qwen3 serving and $10\%$ Qwen3 invocation ratio, NPU utilization is $29.2\%$ at $10\%$ intent ratio, $60.7\%$ at $20\%$ intent ratio, and $95.8\%$ at $30\%$ intent ratio. At $40\%$ intent ratio, NPU utilization exceeds $100\%$, so the fixed NPU cluster is overloaded. Higher intent ratios require more NPU capacity, lower Qwen3 invocation ratio, shorter token profiles, faster serving, or admission control.
+
+After calibrating the intent-side Agent CPU baseline to $0.70\ CPU\text{-}ms/request$, the $20\%$ intent-ratio case remains below the $70\%$ degraded threshold and is classified as stable. At $30\%$ intent ratio, the system is high risk because NPU utilization, not CPU utilization, becomes the bottleneck.
 
 ## 1.8 Model Boundary
 
