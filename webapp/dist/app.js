@@ -15,6 +15,25 @@ function mustGet(id) {
     }
     return node;
 }
+function exportCanvasPng(button) {
+    const chartId = button.dataset.exportChart;
+    const filename = button.dataset.exportFilename ?? "agentic-resource-chart.png";
+    if (!chartId)
+        return;
+    const canvas = mustGet(chartId);
+    canvas.toBlob((blob) => {
+        if (!blob)
+            return;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    }, "image/png");
+}
 const input = Object.fromEntries(INPUT_IDS.map((id) => [id, mustGet(id)]));
 function num(id) {
     const value = Number(input[id].value);
@@ -315,6 +334,9 @@ function toggleLanguage() {
 }
 INPUT_IDS.forEach((id) => {
     input[id].addEventListener("input", recompute);
+});
+document.querySelectorAll("[data-export-chart]").forEach((button) => {
+    button.addEventListener("click", () => exportCanvasPng(button));
 });
 mustGet("langToggle").addEventListener("click", toggleLanguage);
 mustGet("resetBtn").addEventListener("click", reset);

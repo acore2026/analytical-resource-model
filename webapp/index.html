@@ -233,6 +233,7 @@
             <div class="panel-title inline">
               <span class="panel-code">05</span>
               <h2 data-i18n="intentSweep">Intent Sweep</h2>
+              <button class="export-chart" type="button" data-export-chart="sweepChart" data-export-filename="agentic-intent-sweep.png" data-i18n="savePng">Save PNG</button>
             </div>
             <p class="chart-description" data-i18n="intentSweepDescription">X-axis: intent-bearing share across all request types, sampled every 1 percentage point. The convex nonlinear model adds contention overhead as load grows, so utilization curves bend upward instead of remaining straight.</p>
             <div class="chart-frame">
@@ -246,6 +247,7 @@
             <div class="panel-title inline">
               <span class="panel-code">06</span>
               <h2 data-i18n="userCountSweep">User Count Sensitivity</h2>
+              <button class="export-chart" type="button" data-export-chart="userCountChart" data-export-filename="agentic-user-count-sensitivity.png" data-i18n="savePng">Save PNG</button>
             </div>
             <p class="chart-description" data-i18n="userCountSweepDescription">Intent ratio is fixed at 20%. User count is swept from 0.5M to 4.0M. The convex nonlinear model adds contention overhead as service volume grows; the NPU line shows inference-resource utilization.</p>
             <div class="chart-frame">

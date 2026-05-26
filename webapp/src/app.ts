@@ -21,6 +21,26 @@ function mustGet<T extends HTMLElement>(id: string): T {
   return node as T;
 }
 
+function exportCanvasPng(button: HTMLElement): void {
+  const chartId = button.dataset.exportChart;
+  const filename = button.dataset.exportFilename ?? "agentic-resource-chart.png";
+  if (!chartId) return;
+
+  const canvas = mustGet<HTMLCanvasElement>(chartId);
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
+
 const input = Object.fromEntries(
   INPUT_IDS.map((id) => [id, mustGet<HTMLInputElement>(id)])
 ) as Record<string, HTMLInputElement>;
@@ -351,6 +371,10 @@ function toggleLanguage(): void {
 
 INPUT_IDS.forEach((id) => {
   input[id].addEventListener("input", recompute);
+});
+
+document.querySelectorAll<HTMLElement>("[data-export-chart]").forEach((button) => {
+  button.addEventListener("click", () => exportCanvasPng(button));
 });
 
 mustGet("langToggle").addEventListener("click", toggleLanguage);

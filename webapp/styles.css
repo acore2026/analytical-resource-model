@@ -209,6 +209,24 @@ h2 {
   margin: 0 0 12px;
 }
 
+.export-chart {
+  margin-left: auto;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  background: #fbfcf8;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.export-chart:hover {
+  border-color: var(--accent);
+  background: rgba(54, 94, 59, 0.08);
+}
+
 .panel-code {
   width: 30px;
   height: 30px;
