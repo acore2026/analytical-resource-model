@@ -30,7 +30,7 @@ $$
 \mathrm{intent\ request} = \mathrm{normal\ core\ work} + \mathrm{Agent\ parsing/planning/tool\ cost}
 $$
 
-这会影响 CPU、内存、带宽和时延。
+这会影响 CPU、内存和带宽。
 
 ## 第四步：把 Qwen3 请求换算成 Token
 

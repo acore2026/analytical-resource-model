@@ -28,18 +28,18 @@ $$
 
 基线采用 $N_{\mathrm{user}}=3.6\times10^6$ 用户和 $2$ PDU sessions/user。基线总速率为 $104,300$ requests/s。任意请求类型都可能携带意图，因此意图比例 $\rho_I$ 应用于完整请求流。
 
-| 事件 | 默认每用户每小时次数 | 推导请求速率 | 基线时延 | 基线 CPU | 基线带宽 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 初始注册 | 0.1 events/user/hour | 100 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request |
-| 周期注册 | 0.1 events/user/hour | 100 requests/s | 25 ms | 1.5 CPU-ms/request | 10 KB/request |
-| 移动性注册 | 7.0 events/user/hour | 7,000 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request |
-| 初始 PDU 会话建立 | 1.0 events/user/hour | 1,000 requests/s | 40 ms | 2.5 CPU-ms/request | 16 KB/request |
-| PDU 会话释放 | 1.0 events/user/hour | 1,000 requests/s | 25 ms | 1.5 CPU-ms/request | 10 KB/request |
-| PDU 会话修改 | 2.0 events/user/hour | 2,000 requests/s | 30 ms | 2.0 CPU-ms/request | 12 KB/request |
-| 业务请求 | 21.0 events/user/hour | 21,000 requests/s | 20 ms | 1.2 CPU-ms/request | 8 KB/request |
-| AN 释放 | 35.0 events/user/hour | 35,000 requests/s | 15 ms | 0.8 CPU-ms/request | 6 KB/request |
-| 切换 | 23.1 events/user/hour | 23,100 requests/s | 25 ms | 1.8 CPU-ms/request | 12 KB/request |
-| 寻呼 | 14.0 events/user/hour | 14,000 requests/s | 12 ms | 0.6 CPU-ms/request | 4 KB/request |
+| 事件 | 默认每用户每小时次数 | 推导请求速率 | 基线 CPU | 基线带宽 |
+| --- | ---: | ---: | ---: | ---: |
+| 初始注册 | 0.1 events/user/hour | 100 requests/s | 2.0 CPU-ms/request | 12 KB/request |
+| 周期注册 | 0.1 events/user/hour | 100 requests/s | 1.5 CPU-ms/request | 10 KB/request |
+| 移动性注册 | 7.0 events/user/hour | 7,000 requests/s | 2.0 CPU-ms/request | 12 KB/request |
+| 初始 PDU 会话建立 | 1.0 events/user/hour | 1,000 requests/s | 2.5 CPU-ms/request | 16 KB/request |
+| PDU 会话释放 | 1.0 events/user/hour | 1,000 requests/s | 1.5 CPU-ms/request | 10 KB/request |
+| PDU 会话修改 | 2.0 events/user/hour | 2,000 requests/s | 2.0 CPU-ms/request | 12 KB/request |
+| 业务请求 | 21.0 events/user/hour | 21,000 requests/s | 1.2 CPU-ms/request | 8 KB/request |
+| AN 释放 | 35.0 events/user/hour | 35,000 requests/s | 0.8 CPU-ms/request | 6 KB/request |
+| 切换 | 23.1 events/user/hour | 23,100 requests/s | 1.8 CPU-ms/request | 12 KB/request |
+| 寻呼 | 14.0 events/user/hour | 14,000 requests/s | 0.6 CPU-ms/request | 4 KB/request |
 
 ## 1.2 资源参数
 
@@ -59,9 +59,6 @@ $$
 | 非线性开销模型 | 基于 USL 的竞争与协调开销曲线 |
 | 非意图 Agent CPU 成本 | 0.3 CPU-ms/request |
 | 意图 Agent CPU 成本 | 2.0 CPU-ms/request |
-| 非意图 Agent 时延 | 1 ms/request |
-| 意图固定 Agent 时延 | 4 ms/request |
-| 复杂意图 Qwen3 服务时间 | 8 ms/request |
 | 意图额外带宽 | 12 KB/request |
 
 $CPU\text{-}ms$ 表示一个 CPU 核被占用一毫秒。例如， $2\ CPU\text{-}ms/request$ 在 $100,000$ requests/s 下消耗 $200$ CPU cores。
@@ -128,22 +125,6 @@ $$
 
 轻量级 NW-Agent 额外开销包括请求归一化、识别请求不包含意图容器、请求类型分类、绑定到对应的服务 Agent 或工具路径、基础策略/上下文检查、确定性流程触发准备，以及 Agent 侧状态和追踪信息更新。该开销不包含 Qwen3/NPU 推理、自然语言意图理解、复杂任务拆解或多 Agent 协作。
 
-对于不调用 Qwen3、只使用轻量 Agent 逻辑处理的意图请求，模型将 Agent 侧时延表示为固定意图 Agent 时延加上请求路径中的 CPU 侧 Agent 工作量。
-
-$$
-D_{\mathrm{intent,light}} = 4\ \mathrm{ms} + 2\ \mathrm{ms}
-$$
-
-其中： $D_{\mathrm{intent,light}}$ 表示轻量意图处理带来的时延； $4\ \mathrm{ms}$ 表示固定意图 Agent 时延； $2\ \mathrm{ms}$ 表示请求路径中的 CPU 侧 Agent 工作量。
-
-对于调用 Qwen3 的意图请求，Qwen3 服务时间建模为 $8\ \mathrm{ms/request}$ 。主模型不包含排队时延，以便让分析更容易解释。当利用率升高时，模型通过退化、高风险或不稳定状态表示容量风险，而不是额外计算等待时间。
-
-$$
-D_{Q,\mathrm{service}} = 8\ \mathrm{ms/request}
-$$
-
-其中： $D_{Q,\mathrm{service}}$ 表示每请求 Qwen3 推理服务时间； $8\ \mathrm{ms/request}$ 是复杂意图请求使用的分析型服务时间假设。
-
 携带意图请求额外增加 $12\ \mathrm{KB/request}$ 控制面元数据，用于意图容器、任务元数据、工具调用封装以及 Agent 间状态/追踪元数据。
 
 ## 1.5 基于 USL 的非线性开销模型
@@ -184,16 +165,15 @@ $$
 
 | 资源区域 | 非线性因素 | 模型中的含义 |
 | --- | --- | --- |
-| CPU | 调度开销、锁竞争、缓存未命中、内存访问延迟、序列化/反序列化和状态存储压力。 | CPU 负载升高时，有效 CPU-ms/request 上升。 |
+| CPU | 调度开销、锁竞争、缓存未命中、内存访问开销、序列化/反序列化和状态存储压力。 | CPU 负载升高时，有效 CPU-ms/request 上升。 |
 | 用于 Qwen3 的 NPU 服务 | 批处理效率下降、请求路由、副本调度、运行时协调、跨副本开销，以及 KV/cache 内存压力。 | 将原始 token 需求转换为有效 token 需求，再计算配置 NPU 集群的利用率。 |
 | 网络 | 缓冲、拥塞控制、重传风险和额外控制面协调。 | 网络利用率升高时，有效带宽负载上升。 |
-| 时延 | 直接流程时延、固定 Agent 时延、CPU 侧意图工作量和可选 Qwen3 服务时间。 | 主时延估算不包含排队；高利用率通过容量风险状态表示。 |
 
 KV/cache 内存压力对 Qwen3 服务尤其重要。在高并发场景下，活跃请求会更长时间占用 key-value cache、运行时缓冲区和调度状态。这会降低新请求可用的有效吞吐能力，即使每个请求的原始 token 配置没有变化。因此，模型并不表示 Qwen3 为单个请求生成了更多语义 token；模型使用有效 token 需求来表示模型服务系统周边的额外开销。
 
 本文的非线性假设是基于上述服务系统效应形成的分析模型。USL 提供竞争加协调的通用结构。LLM 服务相关参考文献支持将该类开销项应用到 Qwen3/NPU 服务，因为批处理、调度和 KV/cache 内存压力会在并发场景下降低有效服务效率。
 
-以下小节说明模型如何将 $F_{\mathrm{USL}}(\cdot)$ 分别应用到 CPU、Qwen3/NPU 和网络利用率。时延随后按不含排队的直接处理时间计算。
+以下小节说明模型如何将 $F_{\mathrm{USL}}(\cdot)$ 分别应用到 CPU、Qwen3/NPU 和网络利用率。
 
 ### 1.5.2 CPU 利用率
 
@@ -257,46 +237,27 @@ $$
 
 其中： $u_{\mathrm{net}}$ 表示加入非线性开销后的有效网络利用率； $u_{\mathrm{net,linear}}$ 表示加入开销前的原始网络利用率； $F_{\mathrm{USL}}(\cdot)$ 表示基于 USL 的开销函数。
 
-### 1.5.5 不含排队的时延
-
-主时延模型有意不包含排队时延。这样可以让论文模型聚焦于单请求处理成本和资源容量。如果利用率较高，结果应理解为容量风险，而不是精确的时延预测。
-
-$$
-D_{\mathrm{nonintent},i} = D_{\mathrm{base},i} + D_{\mathrm{agent,nonintent}}
-$$
-
-其中： $D_{\mathrm{nonintent},i}$ 表示类型 $i$ 的非意图请求不含排队时延； $D_{\mathrm{base},i}$ 表示基础确定性流程时延； $D_{\mathrm{agent,nonintent}}$ 表示轻量级非意图 Agent 时延。
-
-对于意图请求，不含排队时延由固定 Agent 时延、CPU 侧意图工作量和配置比例的 Qwen3 服务时间组成：
-
-$$
-D_{\mathrm{intent},i} = D_{\mathrm{base},i} + D_{\mathrm{agent,intent}} + C_{\mathrm{agent,intent}} + r_Q D_{Q,\mathrm{service}}
-$$
-
-其中： $D_{\mathrm{intent},i}$ 表示类型 $i$ 的意图请求不含排队时延； $D_{\mathrm{agent,intent}}$ 表示固定意图 Agent 时延； $C_{\mathrm{agent,intent}}$ 表示按请求路径毫秒数表达的 CPU 侧意图 Agent 工作量； $r_Q$ 表示 Qwen3 调用比例； $D_{Q,\mathrm{service}}$ 表示 Qwen3 服务时间。排队时延不属于主模型。
-
 ## 1.6 分析结果
 
-下表固定用户规模、事件频率和 Qwen3 集群规模，仅以固定 $10\%$ 步长改变全部请求中携带意图的比例。可见资源利用率结果使用基于 USL 的非线性开销模型。时延列是不含排队的处理时间估算。意图比例扫描图使用 $1\%$ 采样展示细节。
+下表固定用户规模、事件频率和 Qwen3 集群规模，仅以固定 $10\%$ 步长改变全部请求中携带意图的比例。可见资源利用率结果使用基于 USL 的非线性开销模型。意图比例扫描图使用 $1\%$ 采样展示细节。
 
-| 意图比例 | 总意图占比 | 意图 rps | Qwen3 rps | 有效 Qwen3 tokens/s | CPU 核 | CPU 利用率 | 内存流量 | NPU 利用率 | 网络带宽 | 平均时延 | 状态 |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 0% | 0.0% | 0 | 0 | 0 | 167.5 | 65.4% | 53.402 Gbps | 0.0% | 6.805 Gbps | 20.5 ms | 稳定 |
-| 10% | 10.0% | 10,430 | 1,043 | 140,772 | 188.6 | 73.7% | 90.783 Gbps | 29.2% | 7.815 Gbps | 21.1 ms | 退化 |
-| 20% | 20.0% | 20,860 | 2,086 | 292,242 | 210.4 | 82.2% | 128.164 Gbps | 60.7% | 8.827 Gbps | 21.6 ms | 退化 |
-| 30% | 30.0% | 31,290 | 3,129 | 461,170 | 232.8 | 90.9% | 165.545 Gbps | 95.8% | 9.840 Gbps | 22.2 ms | 高风险 |
-| 40% | 40.0% | 41,720 | 4,172 | 654,315 | 255.9 | 100.0% | 202.926 Gbps | 136.0% | 10.855 Gbps | 22.8 ms | 不稳定 |
-| 50% | 50.0% | 52,150 | 5,215 | 878,438 | 279.8 | 109.3% | 240.307 Gbps | 182.5% | 11.871 Gbps | 23.4 ms | 不稳定 |
-| 60% | 60.0% | 62,580 | 6,258 | 1,140,298 | 304.6 | 119.0% | 277.688 Gbps | 236.9% | 12.890 Gbps | 24.0 ms | 不稳定 |
-| 70% | 70.0% | 73,010 | 7,301 | 1,446,655 | 330.2 | 129.0% | 315.069 Gbps | 300.6% | 13.909 Gbps | 24.5 ms | 不稳定 |
-| 80% | 80.0% | 83,440 | 8,344 | 1,804,268 | 356.7 | 139.4% | 352.451 Gbps | 374.9% | 14.931 Gbps | 25.1 ms | 不稳定 |
-| 90% | 90.0% | 93,870 | 9,387 | 2,219,898 | 384.3 | 150.1% | 389.832 Gbps | 461.2% | 15.955 Gbps | 25.7 ms | 不稳定 |
-| 100% | 100.0% | 104,300 | 10,430 | 2,700,304 | 412.9 | 161.3% | 427.213 Gbps | 561.1% | 16.980 Gbps | 26.3 ms | 不稳定 |
+| 意图比例 | 总意图占比 | 意图 rps | Qwen3 rps | 有效 Qwen3 tokens/s | CPU 核 | CPU 利用率 | 内存流量 | NPU 利用率 | 网络带宽 | 状态 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 0% | 0.0% | 0 | 0 | 0 | 167.5 | 65.4% | 53.402 Gbps | 0.0% | 6.805 Gbps | 稳定 |
+| 10% | 10.0% | 10,430 | 1,043 | 140,772 | 188.6 | 73.7% | 90.783 Gbps | 29.2% | 7.815 Gbps | 退化 |
+| 20% | 20.0% | 20,860 | 2,086 | 292,242 | 210.4 | 82.2% | 128.164 Gbps | 60.7% | 8.827 Gbps | 退化 |
+| 30% | 30.0% | 31,290 | 3,129 | 461,170 | 232.8 | 90.9% | 165.545 Gbps | 95.8% | 9.840 Gbps | 高风险 |
+| 40% | 40.0% | 41,720 | 4,172 | 654,315 | 255.9 | 100.0% | 202.926 Gbps | 136.0% | 10.855 Gbps | 不稳定 |
+| 50% | 50.0% | 52,150 | 5,215 | 878,438 | 279.8 | 109.3% | 240.307 Gbps | 182.5% | 11.871 Gbps | 不稳定 |
+| 60% | 60.0% | 62,580 | 6,258 | 1,140,298 | 304.6 | 119.0% | 277.688 Gbps | 236.9% | 12.890 Gbps | 不稳定 |
+| 70% | 70.0% | 73,010 | 7,301 | 1,446,655 | 330.2 | 129.0% | 315.069 Gbps | 300.6% | 13.909 Gbps | 不稳定 |
+| 80% | 80.0% | 83,440 | 8,344 | 1,804,268 | 356.7 | 139.4% | 352.451 Gbps | 374.9% | 14.931 Gbps | 不稳定 |
+| 90% | 90.0% | 93,870 | 9,387 | 2,219,898 | 384.3 | 150.1% | 389.832 Gbps | 461.2% | 15.955 Gbps | 不稳定 |
+| 100% | 100.0% | 104,300 | 10,430 | 2,700,304 | 412.9 | 161.3% | 427.213 Gbps | 561.1% | 16.980 Gbps | 不稳定 |
 
 生成结果位于 `outputs/agentic_resource_results.csv`。用户规模敏感性扫描位于 `outputs/agentic_resource_sensitivity.csv`。Qwen3 敏感性扫描位于 `outputs/agentic_qwen3_sizing_sensitivity.csv`。
 
 ![](outputs/agentic_resource_utilization.png)
-![](outputs/agentic_latency.png)
 
 下列用户规模敏感性图固定意图比例为 $20\%$ ，并将用户规模从 $0.5$ million 扫描到 $4.0$ million。
 
@@ -308,7 +269,7 @@ $$
 
 ## 1.8 模型边界
 
-所有数值均为容量和敏感性分析的分析型输入参数。实际部署结果取决于模型大小、批处理行为、推理硬件、NF 实现、数据库访问时延、消息编码、工具粒度和运营商策略逻辑。实测部署数据可用于校准 CPU 时间、推理时延、内存流量、消息大小以及未来可能加入的排队扩展。主模型有意不包含排队时延。
+所有数值均为容量和敏感性分析的分析型输入参数。实际部署结果取决于模型大小、批处理行为、推理硬件、NF 实现、数据库访问行为、消息编码、工具粒度和运营商策略逻辑。实测部署数据可用于校准 CPU 时间、内存流量、消息大小。
 
 ## 1.9 参考文献
 
@@ -319,7 +280,7 @@ $$
    该经典论文说明共享串行工作会限制可扩展容量。本文将其作为背景依据，用于说明协调和共享控制面工作不应被视为免费的并行能力。
 
 3. [Sarathi-Serve: Tackling User-Generated Request Variability in LLM Inference Serving](https://arxiv.org/abs/2403.02310)，OSDI 2024 版本见 [PDF](https://www.usenix.org/system/files/osdi24-agrawal.pdf)。
-   该论文说明 LLM 服务性能受 prefill 和 decode 阶段之间的调度与批处理影响。本文使用该证据支撑对 Qwen3 服务应用非线性容量开销项；排队时延本身不属于主时延计算。
+   该论文说明 LLM 服务性能受 prefill 和 decode 阶段之间的调度与批处理影响。本文使用该证据支撑对 Qwen3 服务应用非线性容量开销项。
 
 4. [Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)。
    该论文说明 KV-cache 内存管理是 LLM 服务的关键问题。KV cache 规模大且动态变化；低效内存管理会降低批处理效率和服务吞吐。因此，本文将原始 Qwen3 token 需求转换为考虑 KV/cache 压力后的有效 token 需求。

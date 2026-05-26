@@ -66,7 +66,6 @@ export function evaluate(num, intentRatioPercent = num("intentRatio"), userCount
     const actualIntentShare = totalRps > 0 ? intentRps / totalRps : 0;
     const baseCpuAvg = weightedAverage(events, totalRps, "baseCpuMs");
     const baseBandwidthAvg = weightedAverage(events, totalRps, "baseBandwidthKb");
-    const baseLatencyAvg = weightedAverage(events, totalRps, "baseLatencyMs");
     const linearCpuMsPerRequest = baseCpuAvg
         + actualIntentShare * Math.max(0, num("intentCpu"))
         + (1 - actualIntentShare) * Math.max(0, num("nonIntentCpu"));
@@ -98,28 +97,14 @@ export function evaluate(num, intentRatioPercent = num("intentRatio"), userCount
     const qwen3NonlinearMultiplier = effectiveLoadMultiplier(qwen3RawUtil);
     const qwen3EffectiveTokenDemand = qwen3TokenDemand * qwen3NonlinearMultiplier;
     const npuUtil = qwen3ClusterCapacity > 0 ? qwen3EffectiveTokenDemand / qwen3ClusterCapacity : 0;
-    const qwen3Latency = Math.max(0, num("qwen3LatencyMs"));
-    const activeQwen3Requests = qwen3RequestRps * Math.max(0, num("qwen3LatencyMs")) / 1000;
     const activeNpuCount = qwen3AvailableReplicas * qwen3TensorParallel;
-    const npuHbmGb = qwen3RequestRps > 0 ? activeNpuCount * 16 + activeQwen3Requests * 4 / 1024 : 0;
+    const npuHbmGb = qwen3RequestRps > 0 ? activeNpuCount * 16 + qwen3RequestRps * 0.032 / 1024 : 0;
     const productionHbmGb = qwen3NpuCount * Math.max(1, num("npuHbmPerNpuGb"));
     const npuHbmUtil = productionHbmGb > 0 ? npuHbmGb / productionHbmGb : 0;
-    const activeRequests = totalRps * baseLatencyAvg / 1000;
-    const ramGb = 32 + activeRequests * 128 / 1024 / 1024;
+    const ramGb = 32 + totalRps * 128 / 1024 / 1024;
     const ramUtil = ramGb / Math.max(1, num("ramGb"));
     const memoryTrafficKb = (1 - actualIntentShare) * 64 + actualIntentShare * 512;
     const memoryTrafficGbps = totalRps * memoryTrafficKb * 8 / 1000000;
-    let meanLatency = 0;
-    for (const event of events) {
-        const eventShare = totalRps > 0 ? event.rps / totalRps : 0;
-        const eventIntentShare = intentRatio;
-        const nonIntentLatency = event.baseLatencyMs + 1;
-        const intentLatency = event.baseLatencyMs
-            + 4
-            + Math.max(0, num("intentCpu"))
-            + qwen3InvocationRatio * qwen3Latency;
-        meanLatency += eventShare * ((1 - eventIntentShare) * nonIntentLatency + eventIntentShare * intentLatency);
-    }
     const bottleneckUtil = Math.max(cpuUtil, npuUtil, networkUtil);
     const unstable = cpuUtil >= 1 || npuUtil >= 1 || networkUtil >= 1;
     const systemStatus = unstable ? "unstable" : classifyStatus(bottleneckUtil);
@@ -148,7 +133,6 @@ export function evaluate(num, intentRatioPercent = num("intentRatio"), userCount
         networkGbps,
         networkNonlinearMultiplier,
         networkUtil,
-        meanLatency,
         systemStatus,
         cpuStatus: classifyStatus(cpuUtil),
         npuStatus: classifyStatus(npuUtil),

@@ -30,7 +30,7 @@ $$
 \mathrm{intent\ request} = \mathrm{normal\ core\ work} + \mathrm{Agent\ parsing/planning/tool\ cost}
 $$
 
-This affects CPU, memory, bandwidth, and latency.
+This affects CPU, memory, bandwidth.
 
 ## Step 4: Convert Qwen3 Requests to Tokens
 

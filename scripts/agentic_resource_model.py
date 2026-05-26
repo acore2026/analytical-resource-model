@@ -51,7 +51,6 @@ def main() -> None:
     print("Wrote outputs/agentic_qwen3_sizing_sensitivity.csv")
     if (out_dir / "agentic_resource_utilization.png").exists():
         print("Wrote outputs/agentic_resource_utilization.png")
-        print("Wrote outputs/agentic_latency.png")
         print("Wrote outputs/agentic_user_count_sensitivity.png")
 
 

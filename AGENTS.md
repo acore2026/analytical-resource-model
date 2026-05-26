@@ -45,11 +45,11 @@ Use 4-space indentation for Python and 2-space indentation for TypeScript, HTML,
 
 ## Testing Guidelines
 
-There is no formal test suite yet. For changes to the Python model, run `py_compile` and regenerate outputs. For web app changes, run `tsc -p webapp/tsconfig.json` and verify the page in a browser at `http://127.0.0.1:7108`. Check that the live calculator updates CPU, memory, NPU, bandwidth, and latency when parameters change.
+There is no formal test suite yet. For changes to the Python model, run `py_compile` and regenerate outputs. For web app changes, run `tsc -p webapp/tsconfig.json` and verify the page in a browser at `http://127.0.0.1:7108`. Check that the live calculator updates CPU, memory, NPU, bandwidth when parameters change.
 
 ## Commit & Pull Request Guidelines
 
-The history currently contains only an initial commit, so use concise imperative commit messages, for example `Add resource calculator web app` or `Update intent latency assumptions`. Pull requests should include a short summary, the commands run, and screenshots when UI changes are made. If model assumptions change, update `agentic_core_resource_model.md`, `agentic_core_resource_model_zh.md`, and regenerated `outputs/` artifacts.
+The history currently contains only an initial commit, so use concise imperative commit messages, for example `Add resource calculator web app`. Pull requests should include a short summary, the commands run, and screenshots when UI changes are made. If model assumptions change, update `agentic_core_resource_model.md`, `agentic_core_resource_model_zh.md`, and regenerated `outputs/` artifacts.
 
 ## Agent-Specific Instructions
 

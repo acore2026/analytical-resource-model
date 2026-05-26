@@ -114,47 +114,25 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
         if qwen3_cluster_token_capacity_tps
         else 0.0
     )
-    qwen3_inference_latency = config.qwen3_latency_ms
 
-    active_qwen3_requests = qwen3_request_rps * config.qwen3_latency_ms / 1000.0
     npu_hbm_gb = 0.0
     if qwen3_request_rps > 0:
         active_npu_count = qwen3_available_replicas * qwen3_tensor_parallel_size
         npu_hbm_gb = (
             active_npu_count * config.fixed_model_hbm_gb
-            + active_qwen3_requests * config.qwen3_active_hbm_mb / 1024.0
+            + qwen3_request_rps * config.qwen3_request_hbm_mb_per_rps / 1024.0
         )
     production_npu_total_hbm_gb = qwen3_cluster_npus * config.npu_hbm_per_npu_gb
 
-    active_requests = rps_total * (weighted_average(config, "base_latency_ms") / 1000.0)
     ram_gb = (
         config.base_ram_gb
-        + active_requests * config.active_context_ram_kb / 1024.0 / 1024.0
+        + rps_total * config.request_state_ram_kb_per_rps / 1024.0 / 1024.0
     )
     memory_traffic_kb_per_request = (
         (1.0 - actual_intent_share) * config.non_intent_mem_traffic_kb
         + actual_intent_share * config.intent_mem_traffic_kb
     )
     memory_traffic_gbps = rps_total * memory_traffic_kb_per_request * 8.0 / 1_000_000.0
-
-    mean_latency = 0.0
-    for event in EVENTS:
-        event_share = event_rps(config, event) / rps_total if rps_total > 0 else 0.0
-        event_intent_share = intent_ratio
-        non_intent_latency = (
-            event.base_latency_ms
-            + config.non_intent_agent_latency_ms
-        )
-        intent_latency = (
-            event.base_latency_ms
-            + config.intent_agent_fixed_latency_ms
-            + config.intent_agent_cpu_ms
-            + config.qwen3_invocation_ratio * qwen3_inference_latency
-        )
-        mean_latency += event_share * (
-            (1.0 - event_intent_share) * non_intent_latency
-            + event_intent_share * intent_latency
-        )
 
     bottleneck_util = max(cpu_util, npu_util, network_util)
     overloaded = cpu_util >= 1.0 or npu_util >= 1.0 or network_util >= 1.0
@@ -202,7 +180,6 @@ def evaluate(config: ModelConfig, intent_ratio: float) -> Dict[str, float | str]
         "network_bandwidth_gbps": bandwidth_gbps,
         "network_utilization": network_util,
         "network_status": status(network_util, 0.70, 0.85),
-        "mean_latency_ms": mean_latency,
         "system_status": "unstable" if overloaded else status(bottleneck_util, 0.70, 0.85),
     }
     for event in EVENTS:

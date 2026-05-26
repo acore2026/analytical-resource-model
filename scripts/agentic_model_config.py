@@ -10,7 +10,6 @@ from typing import List
 class EventType:
     name: str
     per_user_per_hour: float
-    base_latency_ms: float
     base_cpu_ms: float
     base_bandwidth_kb: float
 
@@ -31,10 +30,8 @@ class ModelConfig:
     base_ram_gb: float = 32.0
     fixed_model_hbm_gb: float = 16.0
     non_intent_agent_cpu_ms: float = 0.3
-    non_intent_agent_latency_ms: float = 1.0
     non_intent_mem_traffic_kb: float = 64.0
     intent_agent_cpu_ms: float = 2.0
-    intent_agent_fixed_latency_ms: float = 4.0
     intent_agent_bandwidth_kb: float = 12.0
     intent_mem_traffic_kb: float = 512.0
     qwen3_invocation_ratio: float = 0.10
@@ -42,22 +39,21 @@ class ModelConfig:
     qwen3_output_tokens_per_request: float = 4.0
     qwen3_token_capacity_per_replica: float = 15_040.0
     qwen3_tensor_parallel_size: float = 4.0
-    qwen3_latency_ms: float = 8.0
-    qwen3_active_hbm_mb: float = 4.0
-    active_context_ram_kb: float = 128.0
+    qwen3_request_hbm_mb_per_rps: float = 0.032
+    request_state_ram_kb_per_rps: float = 128.0
 
 
 EVENTS: List[EventType] = [
-    EventType("initial_registration", 0.1, 30.0, 2.0, 12.0),
-    EventType("periodic_registration", 0.1, 25.0, 1.5, 10.0),
-    EventType("mobility_registration", 7.0, 30.0, 2.0, 12.0),
-    EventType("initial_pdu_session_establishment", 1.0, 40.0, 2.5, 16.0),
-    EventType("pdu_session_release", 1.0, 25.0, 1.5, 10.0),
-    EventType("pdu_session_modification", 2.0, 30.0, 2.0, 12.0),
-    EventType("service_request", 21.0, 20.0, 1.2, 8.0),
-    EventType("an_release", 35.0, 15.0, 0.8, 6.0),
-    EventType("handover", 23.1, 25.0, 1.8, 12.0),
-    EventType("paging", 14.0, 12.0, 0.6, 4.0),
+    EventType("initial_registration", 0.1, 2.0, 12.0),
+    EventType("periodic_registration", 0.1, 1.5, 10.0),
+    EventType("mobility_registration", 7.0, 2.0, 12.0),
+    EventType("initial_pdu_session_establishment", 1.0, 2.5, 16.0),
+    EventType("pdu_session_release", 1.0, 1.5, 10.0),
+    EventType("pdu_session_modification", 2.0, 2.0, 12.0),
+    EventType("service_request", 21.0, 1.2, 8.0),
+    EventType("an_release", 35.0, 0.8, 6.0),
+    EventType("handover", 23.1, 1.8, 12.0),
+    EventType("paging", 14.0, 0.6, 4.0),
 ]
 
 INTENT_TABLE_SETTINGS = [step / 100.0 for step in range(0, 101, 10)]

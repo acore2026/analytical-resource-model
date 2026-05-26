@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import math
 from dataclasses import replace
 from pathlib import Path
 from typing import Dict, Iterable, List
@@ -34,13 +33,6 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
 
     out_dir.mkdir(parents=True, exist_ok=True)
     x = [100.0 * float(r["intent_ratio"]) for r in rows]
-
-    def finite_series(key: str) -> List[float | None]:
-        values: List[float | None] = []
-        for row in rows:
-            value = float(row[key])
-            values.append(None if math.isinf(value) else value)
-        return values
 
     fig, ax_util = plt.subplots(figsize=(7, 4.2))
     cpu_line, = ax_util.plot(
@@ -90,29 +82,6 @@ def maybe_write_plots(rows: List[Dict[str, float | str]], out_dir: Path) -> None
     plt.tight_layout()
     plt.savefig(out_dir / "agentic_resource_utilization.png", dpi=180)
     plt.close()
-
-    plt.figure(figsize=(7, 4.2))
-    plt.plot(x, finite_series("mean_latency_ms"), marker="o", markevery=10, color="#2a7f3e", label="mean, no queueing")
-    plt.xlabel("Intent ratio across all requests (%)")
-    plt.ylabel("Latency (ms)")
-    plt.title("No-queue control-plane latency vs. intent ratio")
-    plt.text(
-        0.99,
-        0.04,
-        "Queueing delay is excluded; overload is shown by utilization status.",
-        transform=plt.gca().transAxes,
-        ha="right",
-        va="bottom",
-        fontsize=8,
-        color="#5f6661",
-        bbox={"boxstyle": "round,pad=0.25", "fc": "white", "ec": "#5f6661", "alpha": 0.72},
-    )
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(out_dir / "agentic_latency.png", dpi=180)
-    plt.close()
-
 
 def maybe_write_user_count_plot(config: ModelConfig, out_dir: Path) -> None:
     try:

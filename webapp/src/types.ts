@@ -28,7 +28,6 @@ export interface Baseline {
   qwen3TensorParallel: number;
   nonIntentCpu: number;
   intentCpu: number;
-  qwen3LatencyMs: number;
   intentBandwidthKb: number;
 }
 
@@ -38,7 +37,6 @@ export interface EventDefinition {
   labelKey: string;
   tipKey: string;
   perUserPerHour: number;
-  baseLatencyMs: number;
   baseCpuMs: number;
   baseBandwidthKb: number;
 }
@@ -72,7 +70,6 @@ export interface Result {
   networkGbps: number;
   networkNonlinearMultiplier: number;
   networkUtil: number;
-  meanLatency: number;
   systemStatus: SystemStatus;
   cpuStatus: SystemStatus;
   npuStatus: SystemStatus;

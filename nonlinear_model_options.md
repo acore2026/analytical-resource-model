@@ -14,7 +14,7 @@ Typical sources of non-linearity include:
 | --- | --- |
 | CPU | Cache misses, lock contention, scheduler overhead, state-store pressure, and serialization overhead. |
 | NPU serving | Batching inefficiency, request routing, replica scheduling, KV/cache pressure, runtime coordination, and cross-replica overhead. |
-| Latency | Direct processing-time growth from agent logic and optional Qwen3 service time. Queueing is excluded from the primary model. |
+| Network | Buffering, congestion-control behavior, and coordination-message pressure. |
 
 ## Option 1: Linear Model
 
