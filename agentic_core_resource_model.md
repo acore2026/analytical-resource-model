@@ -141,17 +141,31 @@ $$
 
 Where: $C(N)$ is relative system throughput with $N$ parallel workers; $\alpha$ represents contention; $\beta$ represents coherency or coordination cost.
 
-This paper uses a normalized demand-side form of the same idea:
+The original USL formula predicts how throughput changes when the number of parallel workers changes. This paper needs the opposite view: for a fixed resource pool, estimate how much effective resource demand is created when utilization increases. The model is therefore derived in three steps.
+
+First, let $u$ denote raw utilization from the linear model, where $u=1$ means the linear model already consumes $100\%$ of the configured resource. Without nonlinear overhead, effective utilization would simply be:
+
+$$
+F(u)=u
+$$
+
+Second, add a contention term. Contention is modeled as proportional to current load, so the multiplier increases by $\sigma u$. This represents shared locks, scheduler work, shared state access, cache pressure, and request dispatch contention.
+
+Third, add a coordination term. Coordination/coherency overhead can grow faster than the direct load because requests may interact with shared agents, tools, caches, or serving replicas. The model represents this faster growth with $\kappa u^2$.
+
+These three parts define the overhead multiplier:
 
 $$
 M_{\mathrm{USL}}(u)=1+\sigma u+\kappa u^2
 $$
 
+The effective utilization is the raw utilization multiplied by this overhead multiplier:
+
 $$
 F_{\mathrm{USL}}(u)=u \cdot M_{\mathrm{USL}}(u)
 $$
 
-Where: $u$ is the raw linear utilization before nonlinear overhead; $M_{\mathrm{USL}}(u)$ is the overhead multiplier; $F_{\mathrm{USL}}(u)$ is the effective utilization after nonlinear overhead; $\sigma$ is the contention coefficient; $\kappa$ is the coordination/coherency coefficient.
+Where: $u$ is the raw linear utilization before nonlinear overhead; $1$ is the baseline no-overhead multiplier; $\sigma u$ is the load-proportional contention overhead; $\kappa u^2$ is the faster-growing coordination/coherency overhead; $M_{\mathrm{USL}}(u)$ is the total overhead multiplier; $F_{\mathrm{USL}}(u)$ is the effective utilization after nonlinear overhead.
 
 The default coefficients are:
 
