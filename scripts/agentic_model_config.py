@@ -35,9 +35,9 @@ class ModelConfig:
     intent_agent_bandwidth_kb: float = 12.0
     intent_mem_traffic_kb: float = 512.0
     qwen3_invocation_ratio: float = 0.10
-    qwen3_input_tokens_per_request: float = 2_000.0
-    qwen3_output_tokens_per_request: float = 100.0
-    qwen3_token_capacity_per_replica: float = 15_591.71
+    qwen3_input_tokens_per_request: float = 128.0
+    qwen3_output_tokens_per_request: float = 4.0
+    qwen3_token_capacity_per_replica: float = 15_040.0
     qwen3_tensor_parallel_size: float = 4.0
     qwen3_request_hbm_mb_per_rps: float = 0.032
     request_state_ram_kb_per_rps: float = 128.0
@@ -71,4 +71,4 @@ SENSITIVITY_USERS = [
 ]
 USER_COUNT_PLOT_INTENT_RATIO = 0.20
 QWEN3_INVOCATION_SETTINGS = [0.05, 0.10, 0.20, 0.50, 1.00]
-QWEN3_TOKEN_CAPACITY_SETTINGS = [4_712.0, 5_340.0, 15_591.71]
+QWEN3_TOKEN_CAPACITY_SETTINGS = [4_712.0, 5_340.0, 15_040.0]
